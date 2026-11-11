@@ -76,6 +76,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          VER=$(grep -Eo 'VERSION [0-9.]+' CMakeLists.txt | head -1 | cut -d' ' -f2)
+          VER=$(grep -Eo 'project\(SUDZ VERSION [0-9.]+' CMakeLists.txt | head -1 | awk '{print $3}')
           gh release delete latest --yes --cleanup-tag || true
           gh release create latest Sudz-mac.zip --title "Sudz $VER for Mac" --notes "Sudz $VER: GarageBand plug-in (Audio Unit) and the Sudz app, for macOS 11 or later, Apple silicon and Intel. Unzip, then run install.command (see INSTALL.txt)."
