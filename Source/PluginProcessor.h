@@ -66,6 +66,20 @@ public:
     double getTransferSampleRate() const                  { return transferRate; }
     double getHostSampleRate() const                      { return currentRate; }
     bool hostReportsTimeline() const                      { return hostHasTimeline.load(); }
+    /** GarageBand's tempo (0 until the host has reported one). */
+    double getHostBpm() const { return hostBpm.load(); }
+
+    /** Other Sudz instances in this song (GarageBand runs every track's plug-ins in one process), so a double
+        or harmony can be lined up with the lead. Each: an id, the track name GarageBand reports (may be empty),
+        where its audio starts on the timeline, and its length and rate. */
+    struct PeerInfo { int id = 0; juce::String name; juce::int64 start = 0; juce::int64 length = 0; double rate = 44100.0; };
+    static std::vector<PeerInfo> listPeers (const SudzProcessor* except);
+    /** A peer's tuned audio (raw where nothing has been tuned) over all its sections, as one WAV starting at
+        its earliest section; empty if that instance has gone. */
+    static juce::MemoryBlock peerAudioAsWav (int id);
+    int getInstanceId() const                             { return instanceId; }
+    juce::String getTrackName() const                     { const juce::ScopedLock sl (nameLock); return trackName; }
+    void updateTrackProperties (const TrackProperties& p) override { const juce::ScopedLock sl (nameLock); trackName = p.name; }
 
     /** The transferred recording as a 32-bit float WAV file. */
     juce::MemoryBlock transferAsWav() const;
@@ -134,6 +148,12 @@ private:
     bool lastArmed = false, lastRec = false;
 
     static constexpr int maxTransferSeconds = 15 * 60;
+
+    std::atomic<double> hostBpm { 0.0 };
+    int instanceId = 0;
+    juce::CriticalSection nameLock; juce::String trackName;
+    /** This instance's sections as one timeline-placed buffer (tuned where available). */
+    bool compositeAudio (std::vector<float>& out, juce::int64& start, double& rate) const;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SudzProcessor)
 };

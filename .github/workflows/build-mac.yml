@@ -20,6 +20,18 @@ jobs:
       - name: Build the Audio Unit and the app
         run: cmake --build build --config Release --target Sudz_AU Sudz_Standalone -- -quiet
 
+      - name: Get the native AI engine (ONNX Runtime 1.19.2, the newest that runs on macOS 11)
+        run: |
+          curl -sSL -o ort.tgz https://github.com/microsoft/onnxruntime/releases/download/v1.19.2/onnxruntime-osx-universal2-1.19.2.tgz
+          tar xzf ort.tgz
+          mkdir -p pkg/Sudz/AI
+          cp onnxruntime-osx-universal2-1.19.2/lib/libonnxruntime.1.19.2.dylib pkg/Sudz/AI/libonnxruntime.dylib
+          cp onnxruntime-osx-universal2-1.19.2/LICENSE pkg/Sudz/AI/ONNXRUNTIME-LICENSE.txt
+          cp onnxruntime-osx-universal2-1.19.2/ThirdPartyNotices.txt pkg/Sudz/AI/ONNXRUNTIME-ThirdPartyNotices.txt
+          codesign --force --sign - pkg/Sudz/AI/libonnxruntime.dylib
+          lipo -info pkg/Sudz/AI/libonnxruntime.dylib
+          otool -l pkg/Sudz/AI/libonnxruntime.dylib | grep -A3 LC_BUILD_VERSION | grep minos | sort -u
+
       - name: Sign for local use and package
         run: |
           mkdir -p pkg/Sudz
@@ -39,6 +51,20 @@ jobs:
           cp -R pkg/Sudz/Sudz.component ~/Library/Audio/Plug-Ins/Components/
           killall -9 AudioComponentRegistrar || true
           auval -v aufx Sudz Sdzv
+
+      - name: Check the native AI engine loads
+        run: |
+          mkdir -p "$HOME/Library/Application Support/Sudz/lib"
+          cp pkg/Sudz/AI/libonnxruntime.dylib "$HOME/Library/Application Support/Sudz/lib/"
+          cat > aicheck.c <<'EOF'
+          #include <dlfcn.h>
+          #include <stdio.h>
+          typedef struct { const void* (*GetApi)(unsigned); const char* (*GetVersionString)(void); } Base;
+          int main(int c, char** v) { void* h = dlopen(v[1], RTLD_NOW); if (!h) { printf("dlopen failed: %s\n", dlerror()); return 1; }
+            const Base* (*get)(void) = (const Base* (*)(void)) dlsym(h, "OrtGetApiBase"); if (!get) return 2;
+            const Base* b = get(); printf("ONNX Runtime %s, API 19: %s\n", b->GetVersionString(), b->GetApi(19) ? "ok" : "missing"); return b->GetApi(19) ? 0 : 3; }
+          EOF
+          clang -o aicheck aicheck.c && ./aicheck "$HOME/Library/Application Support/Sudz/lib/libonnxruntime.dylib"
 
       - name: Keep the build
         uses: actions/upload-artifact@v4

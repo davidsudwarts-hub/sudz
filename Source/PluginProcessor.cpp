@@ -1,11 +1,77 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 
+namespace
+{
+    // every Sudz instance in this process (one per track it's on)
+    juce::CriticalSection& registryLock() { static juce::CriticalSection c; return c; }
+    std::vector<SudzProcessor*>& registry() { static std::vector<SudzProcessor*> r; return r; }
+    std::atomic<int> nextInstanceId { 1 };
+}
+
+std::vector<SudzProcessor::PeerInfo> SudzProcessor::listPeers (const SudzProcessor* except)
+{
+    std::vector<PeerInfo> v;
+    const juce::ScopedLock rl (registryLock());
+    for (auto* p : registry())
+    {
+        if (p == except) continue;
+        const juce::ScopedLock sl (p->transferLock);
+        juce::int64 a = std::numeric_limits<juce::int64>::max(), b = std::numeric_limits<juce::int64>::min();
+        auto take = [&] (juce::int64 s, size_t n) { if (n == 0) return; a = std::min (a, s); b = std::max (b, s + (juce::int64) n); };
+        take (p->transferStart, p->transfer.size());
+        for (const auto& sct : p->others) take (sct.start, sct.transfer.size());
+        if (b <= a) continue;
+        v.push_back ({ p->instanceId, p->getTrackName(), a, b - a, p->transferRate });
+    }
+    return v;
+}
+
+bool SudzProcessor::compositeAudio (std::vector<float>& out, juce::int64& start, double& rate) const
+{
+    const juce::ScopedLock sl (transferLock);
+    juce::int64 a = std::numeric_limits<juce::int64>::max(), b = std::numeric_limits<juce::int64>::min();
+    auto span = [&] (juce::int64 s, size_t n) { if (n == 0) return; a = std::min (a, s); b = std::max (b, s + (juce::int64) n); };
+    span (transferStart, transfer.size());
+    for (const auto& sct : others) span (sct.start, sct.transfer.size());
+    if (b <= a || b - a > (juce::int64) (maxTransferSeconds * 200000.0)) return false;
+    out.assign ((size_t) (b - a), 0.0f); start = a; rate = transferRate;
+    const juce::SpinLock::ScopedLockType lock (renderLock);
+    auto place = [&] (const std::vector<float>& raw, const std::vector<float>& tuned, juce::int64 s)
+    {
+        const auto& src = tuned.size() == raw.size() ? tuned : raw;
+        std::copy (src.begin(), src.end(), out.begin() + (s - a));
+    };
+    for (const auto& sct : others) place (sct.transfer, sct.rendered, sct.start);
+    if (! transfer.empty()) place (transfer, rendered, transferStart);
+    return true;
+}
+
+juce::MemoryBlock SudzProcessor::peerAudioAsWav (int id)
+{
+    std::vector<float> a; juce::int64 start = 0; double rate = 44100.0; bool ok = false;
+    {
+        const juce::ScopedLock rl (registryLock());
+        for (auto* p : registry()) if (p->instanceId == id) { ok = p->compositeAudio (a, start, rate); break; }
+    }
+    if (! ok) return {};
+    juce::MemoryOutputStream out;
+    const auto bytes = (juce::uint32) (a.size() * sizeof (float));
+    out.write ("RIFF", 4); out.writeInt ((int) (36 + bytes)); out.write ("WAVE", 4);
+    out.write ("fmt ", 4); out.writeInt (16); out.writeShort (3); out.writeShort (1);
+    out.writeInt ((int) rate); out.writeInt ((int) rate * 4); out.writeShort (4); out.writeShort (32);
+    out.write ("data", 4); out.writeInt ((int) bytes);
+    out.write (a.data(), bytes);
+    return out.getMemoryBlock();
+}
+
 SudzProcessor::SudzProcessor()
     : AudioProcessor (BusesProperties()
                         .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
                         .withOutput ("Output", juce::AudioChannelSet::stereo(), true))
 {
+    instanceId = nextInstanceId++;
+    { const juce::ScopedLock rl (registryLock()); registry().push_back (this); }
     fifoSamples.resize (fifoSize);
     fifoPositions.resize (fifoSize);
 
@@ -28,6 +94,10 @@ SudzProcessor::SudzProcessor()
 
 SudzProcessor::~SudzProcessor()
 {
+    {
+        const juce::ScopedLock rl (registryLock());
+        auto& r = registry(); r.erase (std::remove (r.begin(), r.end(), this), r.end());
+    }
     stopTimer();
 }
 
@@ -90,7 +160,7 @@ void SudzProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBu
         {
             playing = info->getIsPlaying();
             if (auto t = info->getTimeInSamples()) { pos = *t; hasPos = true; }
-            if (auto b = info->getBpm()) bpm = *b;
+            if (auto b = info->getBpm()) { bpm = *b; if (bpm > 20 && bpm < 400) hostBpm.store (bpm); }
         }
 
     if (! hasPos)

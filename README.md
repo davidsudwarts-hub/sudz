@@ -13,6 +13,10 @@ GarageBand has no ARA (the link Melodyne uses in Logic to read a track directly)
 
 **AI clean-up.** **Clean-up › AI clean-up…** removes background noise (fans, traffic, the room, chatter) from the transferred take with a trained network (DeepFilterNet3), while Sudz protects the harmonics of every sung note. The engine and model are compiled into the plug-in, so it works offline; a 4½-minute take takes about half a minute. GarageBand then plays the cleaned, tuned vocal.
 
+**Native AI.** The installer also puts ONNX Runtime 1.19.2 (the newest build that runs on macOS 11) in `~/Library/Application Support/Sudz/lib`. With it, AI clean-up and **Split a song into vocal and backing** run on the Mac's own processor instead of inside the web view: several times faster (a 3-minute song splits in a few minutes instead of 10 to 15). Without it, Sudz falls back to its built-in engine. The separation model (166 MB) is chosen once and copied into `~/Library/Application Support/Sudz/models`.
+
+**Line up with the lead.** Put Sudz on the lead and on a double or harmony track and transfer both. In the double's window, **Notes › Line up with the lead…** lists the other Sudz tracks; pick the lead and Sudz moves the double's notes to where the lead's words start and end (optionally its pitch too). Instances find each other because GarageBand runs every track's plug-ins in one process.
+
 **Original** in the plug-in's transport switches playback back to the untouched track, for A/B comparison. GarageBand's own transport (Space bar, Play, the playhead) drives playback; the plug-in's playhead follows it.
 
 ## What you need
@@ -75,6 +79,7 @@ You get `dist/Sudz-<version>.pkg`. On another Mac, open it, enter the admin pass
 - `Source/PluginProcessor.*`: audio. The transfer FIFO (lock-free from the audio thread), the transferred recording keyed to the host timeline, sample-accurate playback of the tuned audio, and saving it all in the plug-in state.
 - `Source/SudzFx.h`: the live effects chain (plain C++, real-time safe, no allocation while playing). It takes the same settings as the editor's polish chain and is tested against it: on the same vocal, loudness within 0.6 dB, tone within 1.6 dB per band and the same stereo width for the standard styles.
 - `Source/PluginEditor.*`: the window. A JUCE 8 web view showing `ui/index.html` (compiled into the plug-in), with native functions for transfer, saving edits and receiving tuned audio. The page sends only the stretches of audio that changed after each edit.
+- `Source/NativeAI.*`: the native AI engine. ONNX Runtime's C API, loaded at run time with `dlopen` (never linked, so Sudz still opens without it); sessions are shared by every Sudz instance and run on one background thread. `Source/ort/` holds ONNX Runtime's header and licence (MIT).
 - `ui/index.html`: the Sudz editor. It's the same file as the browser version and switches to plug-in mode when it finds JUCE's bridge.
 
 To update the editor, convert a newer Sudz page and rebuild:

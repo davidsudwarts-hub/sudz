@@ -81,7 +81,7 @@ struct Settings
 {
     // the editor's polish keys (same names and units)
     float lowcut = 100, gate = 0, even = 1, punch = 0, warmth = 0, body = 0, mud = 0, presence = 0, air = 0,
-          exciter = 0, deess = 6, verb = 0.6f, size = 1.6f, dbl = 0, chorus = 0, slap = 0, echo = 0, echoBeats = 0.5f, level = -18;
+          exciter = 0, deess = 6, deessHz = 6900, verb = 0.6f, size = 1.6f, dbl = 0, chorus = 0, slap = 0, echo = 0, echoBeats = 0.5f, level = -18;
     float vocalDb = NAN;       // the take's sung level as the editor measured it (seeds the live level trackers)
     // the editor's tone matching (reference vocal or the style's default) as 1/3-octave peaking gains in dB
     std::array<float, 25> toneEq {}; bool hasToneEq = false;
@@ -105,6 +105,7 @@ struct Settings
         else if (k == "air") air = std::clamp (f, -12.0f, 12.0f);
         else if (k == "exciter") exciter = std::clamp (f, 0.0f, 1.0f);
         else if (k == "deess") deess = std::clamp (f, 0.0f, 24.0f);
+        else if (k == "deessHz") deessHz = f > 0 ? std::clamp (f, 3000.0f, 12000.0f) : 6900.0f;
         else if (k == "verb") verb = std::clamp (f, 0.0f, 1.0f);
         else if (k == "size") size = std::clamp (f, 0.3f, 5.0f);
         else if (k == "double") dbl = std::clamp (f, 0.0f, 1.0f);
@@ -388,7 +389,9 @@ private:
             toneOn[k] = s.hasToneEq && std::abs (s.toneEq[k]) > 0.05f && Settings::toneFreqs[k] < sr * 0.45;
             if (toneOn[k]) eqTone[k].set (Biquad::Peak, Settings::toneFreqs[k], sr, 4.32, s.toneEq[k]);
         }
-        dsH1.set (Biquad::HP, 5000, sr); dsH2.set (Biquad::HP, 5000, sr);
+        // the singer's own sibilance band (the editor measures where their "s" sounds peak), as in the editor
+        const double dsFc = std::max (2500.0, std::min ({ 9000.0, sr * 0.4, (double) s.deessHz * 0.72 }));
+        dsH1.set (Biquad::HP, dsFc, sr); dsH2.set (Biquad::HP, dsFc, sr);
         exH1.set (Biquad::HP, 3000, sr); exH2.set (Biquad::HP, 3000, sr); exH3.set (Biquad::HP, 4500, sr); exH4.set (Biquad::HP, 4500, sr);
         static constexpr float vtScale[4] = { 0.42f, 0.70f, 1.0f, 1.35f }, vtPre[4] = { 0.006f, 0.015f, 0.025f, 0.040f },
                                vtDamp[4] = { 0.30f, 0.38f, 0.20f, 0.45f }, vtLp[4] = { 8000, 7000, 9500, 6500 };

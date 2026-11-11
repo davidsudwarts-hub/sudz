@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(SUDZ VERSION 0.15.0)
+project(SUDZ VERSION 0.16.0)
 
 # JUCE: use a local checkout if you pass -DJUCE_DIR=/path/to/JUCE, otherwise download JUCE 8.0.4.
 if(DEFINED JUCE_DIR)
@@ -52,7 +52,8 @@ juce_add_binary_data(SudzUI SOURCES
 
 target_sources(Sudz PRIVATE
     Source/PluginProcessor.cpp
-    Source/PluginEditor.cpp)
+    Source/PluginEditor.cpp
+    Source/NativeAI.cpp)      # ONNX Runtime is loaded at run time (dlopen), so nothing extra to link
 
 if(APPLE)
     target_sources(Sudz PRIVATE Source/MacHelpers.mm)
@@ -71,6 +72,7 @@ target_link_libraries(Sudz
         SudzUI
         juce::juce_audio_utils
         juce::juce_gui_extra
+        ${CMAKE_DL_LIBS}
     PUBLIC
         juce::juce_recommended_config_flags
         juce::juce_recommended_lto_flags

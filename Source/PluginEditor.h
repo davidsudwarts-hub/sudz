@@ -32,6 +32,8 @@ private:
     std::optional<juce::WebBrowserComponent::Resource> getResource (const juce::String& url);
     juce::var stateObject() const;
     juce::WebBrowserComponent::Options makeOptions();
+    static juce::File splitModelFile();
+    void runAiJob (juce::WebBrowserComponent::NativeFunctionCompletion complete, std::function<juce::var()> job);
 
     SudzProcessor& proc;
     juce::WebBrowserComponent web;

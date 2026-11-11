@@ -7,4 +7,11 @@ Installing Sudz (GarageBand plug-in and app)
 
 3. Quit and reopen GarageBand. In your vocal track's plug-ins, remove Sudz and add it again (Audio Units > Sudz).
 
-The plug-in is signed for local use only, which is why it's installed with the command above rather than by double-clicking.
+What goes where:
+  Sudz.component -> ~/Library/Audio/Plug-Ins/Components   (the GarageBand plug-in)
+  Sudz.app       -> /Applications                          (the full editor on its own)
+  AI engine      -> ~/Library/Application Support/Sudz/lib (ONNX Runtime, for fast AI clean-up and song splitting)
+
+The plug-in and app are signed for local use only, which is why they're installed with the command above
+rather than by double-clicking. If the app says Apple can't check it, run:
+   xattr -dr com.apple.quarantine /Applications/Sudz.app

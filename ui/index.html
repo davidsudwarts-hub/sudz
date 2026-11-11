@@ -1,4 +1,4 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>body{margin:0}</style></head><body><title>Sudz Vocal Studio</title>
+<title>Sudz Vocal Studio</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -91,6 +91,7 @@ button.rec.on .dot{background:#fff;animation:blink 1s infinite}
 .plugnote{display:none}
 .desktop .no-desktop{display:none!important}
 .plugin .plugnote{display:block}
+.plugin .fxnote{display:none}
 .panel.front{z-index:55}
 .panel.wide{width:min(480px,calc(100vw - 32px))}
 .eqcv{width:100%;height:170px;border:1px solid var(--line);border-radius:6px;background:var(--lane);touch-action:none;cursor:default}
@@ -114,6 +115,13 @@ h3.sub{margin:4px 0 0;font-size:11px;text-transform:uppercase;letter-spacing:.08
 .chainlist li button{padding:2px 8px}
 .byplist{grid-template-columns:1fr 1fr;gap:4px 10px}
 .byplist .check{font-size:12px}
+.hist{display:flex;flex-direction:column;gap:2px;max-height:min(52vh,420px);overflow:auto}
+.hrow{display:flex;justify-content:space-between;align-items:baseline;gap:10px;text-align:left;width:100%;background:transparent;border:1px solid transparent;border-radius:8px;padding:6px 8px;color:var(--fg)}
+.hrow small{color:var(--muted, #8b90a6);font-size:11px;white-space:nowrap}
+.hrow:hover{border-color:var(--lane-c)}
+.hrow.cur{background:var(--accent-soft);color:#fff}
+.hrow.cur small{color:#e8e4ff}
+.hrow.undone{opacity:.55}
 .mylist .card{grid-template-columns:minmax(0,1fr) auto auto;align-items:center}
 .stats{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums}
 .stats th,.stats td{padding:3px 4px;border-bottom:1px solid var(--line);text-align:right}
@@ -223,6 +231,7 @@ details.fine[open] summary{margin-bottom:6px}
       <button id="demoBtn" class="web-only">Load demo</button>
       <button id="undoBtn" title="Undo (Ctrl/&#x2318;+Z)">Undo</button>
       <button id="redoBtn" title="Redo (Ctrl/&#x2318;+Shift+Z)">Redo</button>
+      <button id="histBtn" title="Edit history: jump back to any step (Y)" aria-label="Edit history">&#x27f2;</button>
       <button id="exportBtn" class="primary web-only" title="Export your vocal as WAV or AIFF: tuned, polished, full mix or separate parts">Export&#x2026;</button>
     </div>
   </header>
@@ -236,7 +245,9 @@ details.fine[open] summary{margin-bottom:6px}
         <button role="menuitem" data-panel="pnl-note"><span>Selected notes&#x2026;</span><span class="mi-v" data-for="pnl-note"></span></button>
         <button role="menuitem" data-panel="pnl-glide"><span>Glide into note&#x2026;</span><span class="mi-v" data-for="pnl-glide"></span></button>
         <button role="menuitem" data-panel="pnl-timing"><span>Timing and tempo&#x2026;</span><span class="mi-v" data-for="pnl-timing"></span></button>
+        <button role="menuitem" data-panel="pnl-align"><span>Line up with the lead&#x2026;</span></button>
         <button role="menuitem" data-panel="pnl-sib"><span>Sibilance and breaths&#x2026;</span><span class="mi-v" data-for="pnl-sib"></span></button>
+        <button role="menuitem" data-panel="pnl-history"><span>Edit history&#x2026;</span></button>
         <button role="menuitem" data-panel="pnl-lyrics"><span>Lyrics&#x2026;</span><span class="mi-v" data-for="pnl-lyrics"></span></button>
       </div>
     </div>
@@ -245,6 +256,7 @@ details.fine[open] summary{margin-bottom:6px}
       <div class="mlist" role="menu" hidden>
         <button role="menuitem" data-panel="pnl-correct"><span>Key and correction&#x2026;</span><span class="mi-v" data-for="pnl-correct"></span></button>
         <button role="menuitem" data-panel="pnl-midi"><span>MIDI and guide&#x2026;</span><span class="mi-v" data-for="pnl-midi"></span></button>
+        <button role="menuitem" data-panel="pnl-singers"><span>My singers&#x2026;</span></button>
         <button role="menuitem" data-panel="pnl-engine"><span>Engine settings&#x2026;</span><span class="mi-v" data-for="pnl-engine"></span></button>
       </div>
     </div>
@@ -255,10 +267,12 @@ details.fine[open] summary{margin-bottom:6px}
         <button role="menuitem" data-panel="pnl-noise" class="web-only"><span>Noise reduction&#x2026;</span><span class="mi-v" data-for="pnl-noise"></span></button>
         <button role="menuitem" data-panel="pnl-hum" class="web-only"><span>Hum removal&#x2026;</span><span class="mi-v" data-for="pnl-hum"></span></button>
         <button role="menuitem" data-panel="pnl-gate" class="web-only"><span>Noise gate&#x2026;</span><span class="mi-v" data-for="pnl-gate"></span></button>
-        <button role="menuitem" data-panel="pnl-deess" class="web-only"><span>De-esser&#x2026;</span><span class="mi-v" data-for="pnl-deess"></span></button>
-        <button role="menuitem" data-panel="pnl-plosive" class="web-only"><span>De-plosive&#x2026;</span><span class="mi-v" data-for="pnl-plosive"></span></button>
-        <button role="menuitem" data-panel="pnl-clicks" class="web-only"><span>Mouth clicks&#x2026;</span><span class="mi-v" data-for="pnl-clicks"></span></button>
+        <button role="menuitem" data-panel="pnl-deess"><span>De-esser&#x2026;</span><span class="mi-v" data-for="pnl-deess"></span></button>
+        <button role="menuitem" data-panel="pnl-plosive"><span>De-plosive&#x2026;</span><span class="mi-v" data-for="pnl-plosive"></span></button>
+        <button role="menuitem" data-panel="pnl-sib"><span>Breaths and &#x201c;s&#x201d; sounds&#x2026;</span></button>
+        <button role="menuitem" data-panel="pnl-clicks"><span>Mouth clicks&#x2026;</span><span class="mi-v" data-for="pnl-clicks"></span></button>
         <button role="menuitem" data-panel="pnl-dereverb" class="web-only"><span>De-reverb&#x2026;</span><span class="mi-v" data-for="pnl-dereverb"></span></button>
+        <button role="menuitem" data-panel="pnl-split" class="plugin-only"><span>Split a song into vocal and backing&#x2026;</span></button>
         <button role="menuitem" data-panel="pnl-clip"><span>Clip repair&#x2026;</span><span class="mi-v" data-for="pnl-clip"></span></button>
       </div>
     </div>
@@ -451,19 +465,21 @@ details.fine[open] summary{margin-bottom:6px}
         <button id="exportGo" class="primary">Export</button>
       </div>
     </section>
-    <section class="panel web-only" id="pnl-plosive" role="dialog" aria-label="De-plosive" hidden>
+    <section class="panel" id="pnl-plosive" role="dialog" aria-label="De-plosive" hidden>
       <div class="phead"><b>De-plosive</b><button class="pclose" aria-label="Close De-plosive">&#xd7;</button></div>
       <div class="pbody">
         <p class="hint fxnote">You hear this with <b>Hear it polished</b>, which switches on when you move a control.</p>
         <div class="ctl"><label for="polPlosive">Amount</label><output id="polPlosiveO">Off</output><input type="range" id="polPlosive" min="0" max="100" step="5" value="0"></div>
+        <p class="hint plugnote">In GarageBand this is built into the vocal Sudz plays back, as soon as you move the slider.</p>
         <p class="hint">Takes the thump out of &#x201c;p&#x201d; and &#x201c;b&#x201d; sounds: the burst of air below about 170 Hz is turned down only while it lasts, so the voice keeps its body.</p>
       </div>
     </section>
-    <section class="panel web-only" id="pnl-clicks" role="dialog" aria-label="Mouth clicks" hidden>
+    <section class="panel" id="pnl-clicks" role="dialog" aria-label="Mouth clicks" hidden>
       <div class="phead"><b>Mouth clicks</b><button class="pclose" aria-label="Close Mouth clicks">&#xd7;</button></div>
       <div class="pbody">
         <p class="hint fxnote">You hear this with <b>Hear it polished</b>, which switches on when you move a control.</p>
         <div class="ctl"><label for="polClicks">Sensitivity</label><output id="polClicksO">Off</output><input type="range" id="polClicks" min="0" max="100" step="5" value="0"></div>
+        <p class="hint plugnote">In GarageBand this is built into the vocal Sudz plays back, as soon as you move the slider.</p>
         <p class="hint">Finds the tiny lip and tongue clicks (under 3 ms) and rebuilds the waveform across each one. Start around 50%.</p>
         <p class="hint" id="clickStat"></p>
       </div>
@@ -718,6 +734,37 @@ details.fine[open] summary{margin-bottom:6px}
         <button id="quantBtn">Quantize all note starts</button>
       </div>
     </section>
+    <section class="panel" id="pnl-align" role="dialog" aria-label="Line up with the lead" hidden>
+      <div class="phead"><b>Line up with the lead</b><button class="pclose" aria-label="Close Line up with the lead">&#xd7;</button></div>
+      <div class="pbody">
+        <p class="hint">For a double, harmony or backing vocal: Sudz listens to the lead and this take side by side, finds where each word starts and ends in both, and moves this take&#x2019;s notes to match. Everything stays editable, and one undo puts it back.</p>
+        <div class="plugin-only" style="flex-direction:column;gap:6px">
+          <label class="field">Lead track<select id="alPeer"></select></label>
+          <p class="hint" id="alPeerHint"></p>
+        </div>
+        <div class="web-only row" id="alFileRow"><label class="btn" for="alFileIn" tabindex="0" id="alFileLbl">Choose the lead vocal&#x2026;</label><input type="file" id="alFileIn" accept="audio/*,.wav,.mp3,.m4a,.aif,.aiff,.flac,.ogg" hidden><span class="hint" id="alFileName" style="align-self:center">Both files should start at the same point in the song (for example, both exported from bar 1).</span></div>
+        <div class="ctl"><label for="alAmt">Tightness</label><output id="alAmtO">100%</output><input type="range" id="alAmt" min="0" max="100" step="5" value="100"></div>
+        <label class="check"><input type="checkbox" id="alPitch"><span>Also match the lead&#x2019;s pitch (doubles singing the same notes)</span></label>
+        <button id="alGo" class="primary" disabled>Line up</button>
+        <p class="hint" id="alHint"></p>
+      </div>
+    </section>
+    <section class="panel" id="pnl-singers" role="dialog" aria-label="My singers" hidden>
+      <div class="phead"><b>My singers</b><button class="pclose" aria-label="Close My singers">&#xd7;</button></div>
+      <div class="pbody">
+        <p class="hint">Save how you like to work with each singer: correction strength, transition speed, &#x201c;s&#x201d; and breath levels, the whole vocal chain and live effects. Load it on their next take and start from there. The key, tempo and notes stay with the song.</p>
+        <div class="two"><label class="field">Singer<input type="text" id="sgName" maxlength="40" placeholder="e.g. David, lead"></label><button id="sgSave" class="primary" style="align-self:end">Save this singer</button></div>
+        <div id="sgList" class="mylist"></div>
+        <p class="hint" id="sgHint"></p>
+      </div>
+    </section>
+    <section class="panel" id="pnl-history" role="dialog" aria-label="Edit history" hidden>
+      <div class="phead"><b>Edit history</b><button class="pclose" aria-label="Close Edit history">&#xd7;</button></div>
+      <div class="pbody">
+        <p class="hint">Every note edit since you opened this take. Click any step to go straight back to it; the steps after it stay listed (faded) until you make a new edit, so you can jump forward again.</p>
+        <div id="histList" class="hist" role="list"></div>
+      </div>
+    </section>
     <section class="panel" id="pnl-sib" role="dialog" aria-label="Sibilance and breaths" hidden>
       <div class="phead"><b>Sibilance and breaths</b><button class="pclose" aria-label="Close Sibilance and breaths">&#xd7;</button></div>
       <div class="pbody">
@@ -737,6 +784,8 @@ details.fine[open] summary{margin-bottom:6px}
         <select id="scaleSel" aria-label="Scale"></select>
         </div>
         <p class="hint" id="keyHint">Detected key appears after analysis.</p>
+        <div class="row" id="keyAlt"></div>
+        <button id="keyDetect" title="Listen to the notes again and pick the key (only the selected notes, if any are selected)">Detect key</button>
         <div class="ctl"><label for="mCentre">Snap centres to scale</label><output id="mCentreO">100%</output>
         <input type="range" id="mCentre" min="0" max="100" step="1" value="100"></div>
         <div class="ctl"><label for="mDrift">Reduce drift</label><output id="mDriftO">40%</output>
@@ -760,7 +809,7 @@ details.fine[open] summary{margin-bottom:6px}
         <div class="ctl"><label for="midiAmt">Strength</label><output id="midiAmtO">100%</output>
         <input type="range" id="midiAmt" min="0" max="100" step="1" value="100"></div>
         <div class="row"><button id="midiPitch">Snap pitch to guide</button><button id="midiTime">Match timing to guide</button></div>
-        <button id="midiExport" class="web-only">Export notes as MIDI</button>
+        <button id="midiExport">Export notes as MIDI</button>
       </div>
     </section>
     <section class="panel" id="pnl-engine" role="dialog" aria-label="Engine settings" hidden>
@@ -775,6 +824,8 @@ details.fine[open] summary{margin-bottom:6px}
         <label class="check"><input type="checkbox" id="snapScale"> Drag snaps to scale notes</label>
         <div class="ctl"><label for="keepMove">Natural wobble on drawn lines</label><output id="keepMoveO">0%</output>
         <input type="range" id="keepMove" min="0" max="100" step="5" value="0"></div>
+        <label class="check"><input type="checkbox" id="splitChk"> Breath split on big moves (alternative engine)</label>
+        <p class="hint">Moves of three semitones or more shift only the sung tone and carry the breath and air across separately. Some voices sound more natural this way, others pick up a faint trace of the original pitch; compare by ear with <b>B</b>.</p>
         <p class="hint">At 0% the Draw tool follows your line exactly. Raise it to let some of your own tiny pitch movement ride on top of a drawn line, which helps long held lines sound less synthetic.</p>
         <p class="hint">Untouched audio is passed through sample-for-sample. Edited notes are rebuilt one glottal cycle at a time, so the formants, breath and consonants of your voice stay where they were. When a note moves, the consonant just before it moves with it; only the gaps between notes are stretched. On big upward moves (around six semitones and more), the breath that the shift would turn into buzz is measured and put back.</p>
       </div>
@@ -820,12 +871,14 @@ details.fine[open] summary{margin-bottom:6px}
         <p class="hint" id="clipHint"></p>
       </div>
     </section>
-    <section class="panel web-only" id="pnl-deess" role="dialog" aria-label="De-esser" hidden>
+    <section class="panel" id="pnl-deess" role="dialog" aria-label="De-esser" hidden>
       <div class="phead"><b>De-esser</b><button class="pclose" aria-label="Close De-esser">&#xd7;</button></div>
       <div class="pbody">
         <p class="hint fxnote">You hear this with <b>Hear it polished</b>, which switches on when you move a control.</p>
         <div class="ctl"><label for="polDeess">De-ess</label><output id="polDeessO">6 dB</output><input type="range" id="polDeess" min="0" max="12" step="1" value="6"></div>
-        <p class="hint">How far harsh &#x201c;s&#x201d;, &#x201c;sh&#x201d; and &#x201c;t&#x201d; sounds can be turned down. To turn individual s sounds up or down by hand, use Notes &#x203a; Sibilance and breaths.</p>
+        <div class="ctl"><label for="polDeessHz">Frequency</label><output id="polDeessHzO">Auto</output><input type="range" id="polDeessHz" min="2900" max="11000" step="100" value="2900"></div>
+        <p class="hint plugnote">In GarageBand the de-esser is part of <b>Live effects</b>: switch those on to hear it.</p>
+        <p class="hint">How far harsh &#x201c;s&#x201d;, &#x201c;sh&#x201d; and &#x201c;t&#x201d; sounds can be turned down. <b>Auto</b> (far left) listens to your &#x201c;s&#x201d; sounds and works on the band where this singer&#x2019;s are loudest; drag right to choose it yourself. To turn individual s sounds up or down by hand, use Notes &#x203a; Sibilance and breaths.</p>
       </div>
     </section>
     <section class="panel web-only" id="pnl-eq" role="dialog" aria-label="Tone shaping" hidden>
@@ -963,7 +1016,7 @@ details.fine[open] summary{margin-bottom:6px}
         <p class="hint" id="polState" aria-live="polite"></p>
       </div>
     </section>
-    <section class="panel web-only wide" id="pnl-split" role="dialog" aria-label="Split a song" hidden>
+    <section class="panel wide" id="pnl-split" role="dialog" aria-label="Split a song" hidden>
       <div class="phead"><b>Split a song into vocal and backing</b><button class="pclose" aria-label="Close Split a song">&#xd7;</button></div>
       <div class="pbody">
         <p class="hint">Pulls the lead vocal out of a finished song with a trained separation network (HT-Demucs, vocals specialist, MIT licence). Use it to tune or study a vocal from a mix, get an instrumental to sing over, or take a reference vocal for tone matching. It runs in the background in your browser, so you can keep working: roughly 10 to 15 minutes for a 3-minute song.</p>
@@ -975,9 +1028,10 @@ details.fine[open] summary{margin-bottom:6px}
         <progress id="splitProg" max="1" value="0" hidden style="width:100%"></progress>
         <p class="hint" id="splitStatus"></p>
         <div class="row" id="splitResults" hidden>
-          <button id="splitEdit" class="primary">Edit the vocal in Sudz</button>
-          <button id="splitBack">Use the backing as my backing track</button>
+          <button id="splitEdit" class="primary web-only">Edit the vocal in Sudz</button>
+          <button id="splitBack" class="web-only">Use the backing as my backing track</button>
           <button id="splitExport">Export vocal and backing (WAV)</button>
+          <p class="hint plugnote">In GarageBand both files are saved in <b>Music &#x203a; Sudz</b>: drag them onto new tracks.</p>
         </div>
       </div>
     </section>
@@ -1042,6 +1096,11 @@ details.fine[open] summary{margin-bottom:6px}
         <li>Double-click a note to split it &#xb7; <kbd>J</kbd> join</li>
         <li>Wheel scrolls pitch &#xb7; <kbd>Shift</kbd>+wheel scrolls time &#xb7; <kbd>Ctrl</kbd>/<kbd>&#x2318;</kbd>+wheel zooms</li>
         <li><kbd>Ctrl</kbd>/<kbd>&#x2318;</kbd>+<kbd>A</kbd> select all &#xb7; <kbd>Esc</kbd> clear selection</li>
+        <li><kbd>Ctrl</kbd>/<kbd>&#x2318;</kbd>+<kbd>Z</kbd> undo &#xb7; <kbd>Ctrl</kbd>/<kbd>&#x2318;</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> or <kbd>Ctrl</kbd>+<kbd>Y</kbd> redo &#xb7; <kbd>Y</kbd> edit history (jump to any step)</li>
+        <li><kbd>C</kbd> correct the selected notes (all notes if none are selected)</li>
+        <li><kbd>Enter</kbd> play from the first selected note &#xb7; <kbd>,</kbd> <kbd>.</kbd> back / forward 1 s (<kbd>Shift</kbd> for 5 s) &#xb7; <kbd>Home</kbd> <kbd>End</kbd> start / end</li>
+        <li><kbd>+</kbd> <kbd>&#x2212;</kbd> zoom in / out &#xb7; <kbd>0</kbd> fit the take to the window</li>
+        <li><kbd>L</kbd> lyrics &#xb7; <kbd>?</kbd> this list</li>
         </ul>
       </div>
     </section>
@@ -1486,8 +1545,14 @@ const DSP = (() => {
       }
       for (let k = s; k <= e; k++) lvl = Math.max(lvl, rmsDb[k]);
       const r = E > 1e-12 ? Hh / E : 0;
-      if (r > 0.35 && dur <= 0.5) ev.push({ s, e, t: 's' });
-      else if (r >= 0.05 && r <= 0.35 && dur >= 0.12 && lvl < peakDb - 10) ev.push({ s, e, t: 'b' });
+      // an airy in-breath can carry as much top end as an "s"; it gives itself away by being quiet, coming
+      // after a pause and leaving a small gap before the singing starts (an "s" runs straight into its vowel)
+      let pv = s - 1; while (pv > 0 && !voiced[pv]) pv--;
+      let nv = e + 1; while (nv < nf - 1 && !voiced[nv]) nv++;
+      const gapPrev = (s - pv) * hop / sr, gapNext = (nv - e) * hop / sr;
+      const airy = r > 0.35 && dur >= 0.1 && lvl < peakDb - 28 && gapPrev >= 0.25 && gapNext >= 0.04;
+      if (r > 0.35 && dur <= 0.5 && !airy) ev.push({ s, e, t: 's' });
+      else if ((airy || (r >= 0.05 && r <= 0.35 && dur >= 0.12)) && lvl < peakDb - 10) ev.push({ s, e, t: 'b' });
     }
     return ev;
   }
@@ -1719,7 +1784,22 @@ const DSP = (() => {
       result.spans++;
       const a = fa * hop, b = Math.min(N, (fb + 1) * hop);
       const A0 = Math.max(0, a - 4096), B0 = Math.min(N, b + 4096);
-      let yy = psola(x, sr, hop, marks, ctl, M, A0, B0);
+      let yy;
+      // big moves: shift only the harmonic part; carry the breath and air across untouched
+      let big = false;
+      if (STUDIO_BIG) for (let i = fa; i <= fb && !big; i++) { const fi = Math.max(0, Math.min(nf - 1, Math.round(U[i] / hop))); if (voiced[fi] && Math.abs(d[fi] + (ctl.dOut && i < ctl.dOut.length ? ctl.dOut[i] : 0)) >= BIG_CENTS) big = true; }
+      if (big) {
+        const u0 = Math.max(0, Math.floor(Math.min(mapF(M, A0), mapF(M, B0))) - 4096), u1 = Math.min(N, Math.ceil(Math.max(mapF(M, A0), mapF(M, B0))) + 4096);
+        const sp = hnSplit(x, sr, A, u0, u1, (fi) => Math.abs(d[fi]) >= BIG_CENTS * 0.5);
+        const save = x.slice(u0, u1);
+        try { x.set(sp.xh, u0); yy = psola(x, sr, hop, marks, ctl, M, A0, B0); } finally { x.set(save, u0); }
+        // the noise part follows the time map but keeps its own spectrum (and each note's level and fades)
+        for (let n = A0; n < B0; n++) {
+          const u = mapF(M, n) - u0, i0 = Math.floor(u); if (i0 < 0 || i0 + 1 >= sp.xn.length) continue;
+          const fr = Math.max(0, Math.min(nf - 1, Math.round((u + u0) / hop)));
+          yy[n - A0] += (sp.xn[i0] + (sp.xn[i0 + 1] - sp.xn[i0]) * (u - i0)) * Math.pow(10, g[fr] / 20);
+        }
+      } else yy = psola(x, sr, hop, marks, ctl, M, A0, B0);
       { let neg = false; for (let i = fa; i <= fb && !neg; i++) { const fi = Math.max(0, Math.min(nf - 1, Math.round(U[i] / hop))); if (f[fi] <= -0.01) neg = true; }
         if (neg) yy = warpCore(yy, sr, (c) => {
           const u = M.identity ? c : mapF(M, Math.max(0, Math.min(N - 1, c))), fi = Math.max(0, Math.min(nf - 1, Math.round(u / hop)));
@@ -1800,11 +1880,16 @@ const DSP = (() => {
     const h = new Array(12).fill(0);
     for (const n of notes) { const pc = ((Math.round(n._c0 / 100) % 12) + 12) % 12; h[pc] += n.e - n.s + 1; }
     const corr = (a, b) => { const ma = a.reduce((s, v) => s + v, 0) / 12, mb = b.reduce((s, v) => s + v, 0) / 12; let num = 0, da = 0, db = 0; for (let i = 0; i < 12; i++) { num += (a[i] - ma) * (b[i] - mb); da += (a[i] - ma) ** 2; db += (b[i] - mb) ** 2; } return num / Math.sqrt(da * db + 1e-12); };
-    let best = { score: -2, key: 0, mode: 'major' };
+    const all = [];
     for (const mode of ['major', 'minor']) for (let k = 0; k < 12; k++) {
       const prof = PROFILES[mode].map((_, i) => PROFILES[mode][((i - k) % 12 + 12) % 12]);
-      const s = corr(h, prof); if (s > best.score) best = { score: s, key: k, mode };
+      all.push({ score: corr(h, prof), key: k, mode });
     }
+    all.sort((a, b) => b.score - a.score);
+    // how sure: the winner's lead over the runner-up (a relative major/minor pair often scores close)
+    const best = Object.assign({}, all[0]), gap = all[0].score - all[1].score;
+    best.confidence = all[0].score < 0.5 ? 'low' : gap > 0.08 ? 'high' : gap > 0.03 ? 'medium' : 'low';
+    best.ranked = all.slice(0, 4);
     return best;
   }
 
@@ -2192,6 +2277,65 @@ const DSP = (() => {
     }
     return true;
   }
+  // ---- Studio engine for big moves: split the voice into its harmonic part (the sung tone) and its noise part
+  // (breath, air, rasp) before shifting. Only the harmonics go through the pitch shifter; the noise is carried
+  // across at its own pitch-less spectrum and timing, so a big move doesn't turn breath into buzz.
+  // Spectral split: in each voiced frame the noise floor is read between the harmonics (median of each gap)
+  // and that share of every bin goes to the noise part. Where vibrato or a glide smears the upper harmonics
+  // into the gaps, those bins stay with the harmonics (otherwise the original pitch would leak through).
+  // x[U0..U1) in input samples; bigAt(frame) says which analysis frames to split. Returns { xh, xn } (xh + xn = x).
+  function hnSplit(x, sr, A, U0, U1, bigAt) {
+    bInit();
+    const L = U1 - U0, xh = new Float32Array(L), xn = new Float32Array(L), ws = new Float32Array(L);
+    const H = BN / 2, hopS = BN / 4, re = new Float64Array(BN), im = new Float64Array(BN), nr = new Float64Array(BN), ni = new Float64Array(BN), Nf = new Float64Array(H);
+    const { hop, nf, voiced, cents } = A, binHz = sr / BN, BETA = 0.85;
+    for (let s0 = -H; s0 < L; s0 += hopS) {
+      const c = U0 + s0 + H, fi = Math.round(c / hop);
+      const split = fi >= 2 && fi < nf - 2 && voiced[fi] && bigAt(fi);
+      const f0 = split ? 440 * Math.pow(2, (cents[fi] - 6900) / 1200) : 0, fb = f0 / binHz;
+      if (!split || fb < 5) {
+        for (let i = 0; i < BN; i++) { const k = s0 + i; if (k < 0 || k >= L) continue; const w = bWin[i]; xh[k] += x[U0 + k] * w * w; ws[k] += w * w; }
+        continue;
+      }
+      for (let i = 0; i < BN; i++) { const k = s0 + i; re[i] = k >= 0 && k < L ? x[U0 + k] * bWin[i] : 0; im[i] = 0; }
+      fftc(re, im, false);
+      // noise floor between harmonics
+      const pts = [];
+      for (let q = 1; (q + 1) * fb < H - 2; q++) {
+        const a = Math.ceil(q * fb + 0.25 * fb), b = Math.floor((q + 1) * fb - 0.25 * fb); if (b < a) continue;
+        const m = []; for (let k = a; k <= b; k++) m.push(Math.hypot(re[k], im[k]));
+        m.sort((u, v) => u - v); pts.push([(q + 0.5) * fb, m[m.length >> 1]]);
+      }
+      if (pts.length < 2) { for (let i = 0; i < BN; i++) { const k = s0 + i; if (k < 0 || k >= L) continue; const w = bWin[i]; xh[k] += x[U0 + k] * w * w; ws[k] += w * w; } continue; }
+      for (let k = 0, q = 0; k < H; k++) {
+        while (q < pts.length - 2 && pts[q + 1][0] < k) q++;
+        const [x0, y0] = pts[q], [x1, y1] = pts[q + 1];
+        Nf[k] = k <= x0 ? y0 : k >= pts[pts.length - 1][0] ? pts[pts.length - 1][1] : y0 + (y1 - y0) * (k - x0) / (x1 - x0);
+      }
+      // how far the pitch moves across this frame (cents), so how far each harmonic smears
+      const dcFrame = Math.abs(cents[fi + 2] - cents[fi - 2]) / 4, span = dcFrame * BN / hop, rel = Math.pow(2, span / 1200) - 1;
+      const kSmear = rel > 1e-6 ? (0.35 / rel) * fb : H;   // harmonics above this bin smear into their gaps
+      for (let k = 0; k < BN; k++) { nr[k] = 0; ni[k] = 0; }
+      for (let k = Math.max(1, Math.floor(0.5 * fb)); k < H; k++) {
+        if (k > kSmear) break;
+        const mag = Math.hypot(re[k], im[k]); if (mag < 1e-12) continue;
+        const g = BETA * Math.min(1, Nf[k] / mag);
+        nr[k] = re[k] * g; ni[k] = im[k] * g; nr[BN - k] = nr[k]; ni[BN - k] = -ni[k];
+      }
+      fftc(nr, ni, true);
+      for (let i = 0; i < BN; i++) {
+        const k = s0 + i; if (k < 0 || k >= L) continue; const w = bWin[i], nv = nr[i] / BN;
+        xn[k] += nv * w; xh[k] += x[U0 + k] * w * w - nv * w; ws[k] += w * w;
+      }
+    }
+    for (let k = 0; k < L; k++) { if (ws[k] > 1e-9) { xh[k] /= ws[k]; xn[k] /= ws[k]; } else xh[k] = x[U0 + k]; }
+    return { xh, xn };
+  }
+  let STUDIO_BIG = false;         // breath split for big moves: an opt-in alternative (measured: no better on average; left for listening tests)
+  const BIG_CENTS = 300;          // a move counts as big from 3 semitones
+  function setStudioEngine(on) { STUDIO_BIG = !!on; }
+
+  let BREATH_XL = +(globalThis.BREATH_XL ?? 1.5);   // extra breath for moves near an octave up (measured against a ground-truth voice)
   function restoreBreath(x, sr, A, ctl, M, yy, A0, B0) {
     bInit();
     const { hop, nf, voiced, cents } = A, H = BN / 2, add = new Float64Array(B0 - A0);
@@ -2199,7 +2343,7 @@ const DSP = (() => {
     let used = 0;
     for (let c = A0 + BN / 2; c < B0 - BN / 2; c += BHOP) {
       const u = mapF(M, c), fi = Math.round(u / hop); if (fi < 0 || fi >= nf || !voiced[fi]) continue;
-      const r = Math.pow(2, ctl.d[fi] / 1200), b = Math.max(0, Math.min(1, (r - 1.4) / 0.3)); if (!b) continue;
+      const r = Math.pow(2, ctl.d[fi] / 1200), b = Math.max(0, Math.min(1, (r - 1.4) / 0.3)) * (1 + BREATH_XL * Math.max(0, Math.min(1, (r - 1.8) / 0.2))); if (!b) continue;
       const f0 = 440 * Math.pow(2, (cents[fi] - 6900) / 1200);
       if (!noiseFloor(x, Math.round(u), 0, f0, sr, nIn) || !noiseFloor(yy, c, A0, f0 * r, sr, nOut)) continue;
       const re = new Float64Array(BN), im = new Float64Array(BN);
@@ -2963,10 +3107,12 @@ const DSP = (() => {
     }
     return y;
   }
-  // de-esser: when the 5-10 kHz band jumps above the rest, turn that band down (up to maxDb)
-  function deesser(x, sr, maxDb) {
+  // de-esser: when the singer's sibilance band jumps above the rest, turn that band down (up to maxDb).
+  // hz: where this singer's "s" sounds peak (found by sibilanceHz); the band starts a little below it.
+  function deesser(x, sr, maxDb, hz) {
     if (maxDb <= 0) return x;
-    const hf = biquad(biquad(x, 'hp', 5000, sr), 'hp', 5000, sr), y = new Float32Array(x.length);
+    const fc = deessCut(hz, sr);
+    const hf = biquad(biquad(x, 'hp', fc, sr), 'hp', fc, sr), y = new Float32Array(x.length);
     const a = Math.exp(-1 / (sr * 0.003)), K = 16, r16 = Math.pow(Math.exp(-1 / (sr * 0.06)), K), n = x.length; let eh = 0, ef = 0, g = 0, k0 = 1;
     for (let s = 0; s < n; s += K) {
       const e = Math.min(n, s + K);
@@ -2979,6 +3125,34 @@ const DSP = (() => {
       k0 = k1;
     }
     return y;
+  }
+  function deessCut(hz, sr) { return Math.max(2500, Math.min(9000, sr * 0.4, (hz > 0 ? hz : 6900) * 0.72)); }
+  // Where this singer's "s" sounds are loudest: the average spectrum of every detected s, smoothed to
+  // 1/6 octave, peak between 3 and 11 kHz. Everyone's is different (about 4.5 kHz to 10 kHz).
+  function sibilanceHz(x, sr, A, events) {
+    const ss = (events || []).filter(e => e.t === 's'); if (!ss.length) return 0;
+    const N = 2048, H = 1024, h2 = N / 2, P = new Float64Array(h2 + 1), re = new Float64Array(N), im = new Float64Array(N);
+    const win = new Float64Array(N); for (let i = 0; i < N; i++) win[i] = 0.5 - 0.5 * Math.cos(2 * Math.PI * i / N);
+    let frames = 0;
+    for (const e of ss) {
+      const a = e.s * A.hop, b = (e.e + 1) * A.hop;
+      for (let s0 = a; s0 + N <= Math.max(a + N, b) && s0 + N <= x.length && frames < 4000; s0 += H) {
+        for (let i = 0; i < N; i++) { re[i] = x[s0 + i] * win[i]; im[i] = 0; }
+        fftN(re, im, false);
+        let tot = 0; for (let k = 1; k <= h2; k++) tot += re[k] * re[k] + im[k] * im[k];
+        if (tot < 1e-10) continue;
+        for (let k = 1; k <= h2; k++) P[k] += (re[k] * re[k] + im[k] * im[k]) / tot;   // every s counts the same
+        frames++;
+      }
+    }
+    if (!frames) return 0;
+    const bin = sr / N, top = Math.min(11000, sr * 0.45); let best = 0, bestHz = 0;
+    for (let f = 3000; f <= top; f *= Math.pow(2, 1 / 24)) {
+      const lo = Math.max(1, Math.round(f * Math.pow(2, -1 / 12) / bin)), hi = Math.min(h2, Math.round(f * Math.pow(2, 1 / 12) / bin));
+      let s = 0; for (let k = lo; k <= hi; k++) s += P[k]; s /= (hi - lo + 1);
+      if (s > best) { best = s; bestHz = f; }
+    }
+    return Math.round(bestHz / 100) * 100;
   }
   // stereo reverb: 8 delay lines with a Householder feedback matrix, damped highs, pre-delay
   // reverb characters: room (small, early), chamber, plate (dense and bright), hall (big, late, darker)
@@ -3273,7 +3447,7 @@ const DSP = (() => {
         }
         else if (st === 'dyneq') y = dynEq(y, sr, o.dyn);
         else if (st === 'exciter') y = exciter(y, sr, o.exciter, dbToG(lev.target - 12));
-        else if (st === 'deess') y = deesser(y, sr, o.deess);
+        else if (st === 'deess') y = deesser(y, sr, o.deess, o.deessHz);
       }
       return { y, target: lev.target, curve, fir, gr };
     };
@@ -3319,7 +3493,7 @@ const DSP = (() => {
   const POLISH_BASE = { lowcut: 100, body: 0, mud: 0, presence: 0, air: 0, warmth: 0, even: 1, deess: 6, double: 0, echo: 0, echoBeats: 0.5, verb: 0.6, size: 1.6, verbType: 'plate',
     chorus: 0, slap: 0, exciter: 0, punch: 0, deftone: 1, denoise: 0, hum: 0, gate: 0,
     choirAmt: 0, choirN: 8, choirSpread: 0.5, choirDetune: 15, choirWidth: 0.8, choirLead: 0, choirParts: 'unison',
-    plosive: 0, clicks: 0, dereverb: 0, roomRt: 0.6, compMode: 'auto', compType: 'clean', compThr: -10, compRatio: 4, compAtt: 10, compRel: 150 };
+    plosive: 0, clicks: 0, deessHz: 0, dereverb: 0, roomRt: 0.6, compMode: 'auto', compType: 'clean', compThr: -10, compRatio: 4, compAtt: 10, compRel: 150 };
   const STYLE_KEYS = ['lowcut', 'body', 'mud', 'presence', 'air', 'warmth', 'even', 'deess', 'double', 'echo', 'echoBeats', 'verb', 'size', 'verbType', 'chorus', 'slap', 'exciter', 'punch', 'deftone', 'choirAmt', 'choirN', 'choirSpread', 'choirDetune', 'choirWidth', 'choirLead', 'choirParts'];
   const sty = (group, name, o) => Object.assign({ group, name }, POLISH_BASE, o);
   const POLISH_PRESETS = {
@@ -3352,7 +3526,7 @@ const DSP = (() => {
     bvs:       sty('Backing vocals', 'Backing vocals: soft and wide', { lowcut: 160, body: -1, mud: -2, presence: -2, air: 2, warmth: 0.1, even: 1.4, deess: 9, double: 0.7, chorus: 0.25, verb: 0.7, size: 2.0 }),
     spoken:    sty('Spoken voice', 'Podcast or voice-over', { lowcut: 80, body: 1, mud: -1.5, presence: 2, air: 1, warmth: 0.15, even: 1.4, deess: 6, punch: 0.3, verb: 0, size: 0.6, verbType: 'room' })
   };
-  for (const k in POLISH_PRESETS) for (const c of ['denoise', 'hum', 'gate', 'plosive', 'clicks', 'dereverb', 'roomRt', 'compMode', 'compType', 'compThr', 'compRatio', 'compAtt', 'compRel']) delete POLISH_PRESETS[k][c];
+  for (const k in POLISH_PRESETS) for (const c of ['denoise', 'hum', 'gate', 'plosive', 'clicks', 'deessHz', 'dereverb', 'roomRt', 'compMode', 'compType', 'compThr', 'compRatio', 'compAtt', 'compRel']) delete POLISH_PRESETS[k][c];
   // ================= Mix & master =================
   // integrated loudness (ITU-R BS.1770 style: K-weighting, 400 ms blocks, -70 LUFS and -10 LU gates)
   function lufs(L, R, sr) {
@@ -3568,7 +3742,7 @@ const DSP = (() => {
     return files;
   }
 
-  return { aiff24, graphicEqGains, eqCurve, PB, sungLevel, aiDenoise, dfnAnalysis, dfnSynthesis, dfnFeatures, dfnRebuild, dfnWidths, fft960, wavF32, aifcF32, resample, truePeak, rideBacking, edgeKeep, loudStats, COMP_TYPES, PEQ_DEFAULT, DYN_DEFAULT, CHAIN_DEFAULT, CHAIN_NAMES, peqCoefs, respDb, biquadCoef, hardTuneCtl, alignMap, tightenCtl, deplosive, declick, dereverb, compPro, dynEq, vocoder, HARM_INTERVALS, CHOIR_PARTS, harmInterval, harmonyCtl, renderHarmony, render, singerShift, formantWarp, polish, toneProfile, wav24s, POLISH_PRESETS, POLISH_BASE, STYLE_KEYS, VERB_TYPES, denoise, MASTER_PRESETS, mixMaster, polishJob, lufs, biquad, limit2, analyse, segment, derive, newNote, markSlides, isSlideAt, declip, limit, detectEvents, readMidi, writeMidi, clipRuns, parseWav, zipFiles, readZip, buildControl, buildMarks, render, psola, findClips, wavTempo, buildTimeMap, mapF, invF, slopeF, detectKey, synthDemo, wav24, zipStore, median };
+  return { setStudioEngine, hnSplit, sibilanceHz, deessCut, declick, deplosive, deesser, aiff24, graphicEqGains, eqCurve, PB, sungLevel, aiDenoise, dfnAnalysis, dfnSynthesis, dfnFeatures, dfnRebuild, dfnWidths, fft960, wavF32, aifcF32, resample, truePeak, rideBacking, edgeKeep, loudStats, COMP_TYPES, PEQ_DEFAULT, DYN_DEFAULT, CHAIN_DEFAULT, CHAIN_NAMES, peqCoefs, respDb, biquadCoef, hardTuneCtl, alignMap, tightenCtl, deplosive, declick, dereverb, compPro, dynEq, vocoder, HARM_INTERVALS, CHOIR_PARTS, harmInterval, harmonyCtl, renderHarmony, render, singerShift, formantWarp, polish, toneProfile, wav24s, POLISH_PRESETS, POLISH_BASE, STYLE_KEYS, VERB_TYPES, denoise, MASTER_PRESETS, mixMaster, polishJob, lufs, biquad, limit2, analyse, segment, derive, newNote, markSlides, isSlideAt, declip, limit, detectEvents, readMidi, writeMidi, clipRuns, parseWav, zipFiles, readZip, buildControl, buildMarks, render, psola, findClips, wavTempo, buildTimeMap, mapF, invF, slopeF, detectKey, synthDemo, wav24, zipStore, median };
 })();
 /* DSP-END */
 </script>
@@ -3601,7 +3775,7 @@ const DSP = (() => {
     };
     document.addEventListener('click', (e) => {
       const lab = e.target.closest && e.target.closest('label[for]'); if (!lab) return;
-      const inp = document.getElementById(lab.htmlFor); if (!inp || inp.type !== 'file' || inp.disabled) return;
+      const inp = document.getElementById(lab.htmlFor); if (!inp || inp.type !== 'file' || inp.disabled || inp.dataset.native === '1') return;
       e.preventDefault(); openNative(inp);
     }, true);
     const click0 = HTMLInputElement.prototype.click;
@@ -3654,18 +3828,43 @@ const DSP = (() => {
   $('noticeClose').onclick = () => { $('notice').hidden = true; };
 
   // ---------- undo
+  // each step: { s: the notes and erased stretches before the edit, label, t }
   const undo = [], redo = []; let lastEditKey = '', lastEditT = 0;
+  const UNDO_LABELS = { glide: 'Glide', nudge: 'Nudge pitch', semi: 'Move pitch', lyrics: 'Lyrics', lyric: 'Word', tnudge: 'Nudge timing', fine: 'Fine pitch', drift: 'Pitch drift', vib: 'Vibrato', form: 'Formant', gain: 'Note volume', nsib: 'Note \u201cs\u201d level' };
   const snap = () => JSON.stringify({ notes: P.notes, cuts: P.cuts || [] });
-  function pushUndo(key) {
+  function pushUndo(key, label) {
     const now = performance.now();
     if (key && key === lastEditKey && now - lastEditT < 1200) { lastEditT = now; return; }
     lastEditKey = key || ''; lastEditT = now;
-    undo.push(snap()); if (undo.length > 200) undo.shift(); redo.length = 0; updButtons();
+    undo.push({ s: snap(), label: label || UNDO_LABELS[key] || 'Edit', t: Date.now() }); if (undo.length > 200) undo.shift(); redo.length = 0; updButtons();
   }
   function restore(s) { const o = JSON.parse(s), arr = Array.isArray(o) ? o : o.notes; P.cuts = Array.isArray(o) ? (P.cuts || []) : o.cuts || []; const keep = arr.length === P.notes.length ? [...ui.sel] : []; P.notes = arr.map(n => DSP.derive(n, P.A)); ui.sel = new Set(keep.filter(k => k < P.notes.length)); changed(true); } // the selection survives undo/redo when the notes are the same ones
-  function doUndo() { if (!undo.length) return; redo.push(snap()); restore(undo.pop()); lastEditKey = ''; updButtons(); }
-  function doRedo() { if (!redo.length) return; undo.push(snap()); restore(redo.pop()); lastEditKey = ''; updButtons(); }
-  function updButtons() { $('undoBtn').disabled = !undo.length; $('redoBtn').disabled = !redo.length; const has = !!P.x; for (const id of ['exportBtn', 'saveBtn', 'correctBtn', 'playBtn', 'fitBtn']) $(id).disabled = !has; }
+  function doUndo() { if (!undo.length) return; const e = undo.pop(); redo.push({ s: snap(), label: e.label, t: e.t }); restore(e.s); lastEditKey = ''; updButtons(); }
+  function doRedo() { if (!redo.length) return; const e = redo.pop(); undo.push({ s: snap(), label: e.label, t: e.t }); restore(e.s); lastEditKey = ''; updButtons(); }
+  // jump to any point in the history: n steps back (n > 0) or forward (n < 0), rendering once at the end
+  function jumpHistory(n) {
+    if (!n) return;
+    const from = n > 0 ? undo : redo, to = n > 0 ? redo : undo; let k = Math.min(Math.abs(n), from.length); if (!k) return;
+    let cur = snap();
+    while (k--) { const e = from.pop(); to.push({ s: cur, label: e.label, t: e.t }); cur = e.s; }
+    restore(cur); lastEditKey = ''; updButtons();
+  }
+  function updHistory() {
+    const box = $('histList'); if (!box || $('pnl-history').hidden) return;
+    box.innerHTML = '';
+    const ago = (t) => { const s = Math.round((Date.now() - t) / 1000); return s < 60 ? s + ' s ago' : s < 3600 ? Math.round(s / 60) + ' min ago' : new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); };
+    const row = (label, sub, steps, cls) => {
+      const b = document.createElement('button'); b.className = 'hrow ' + cls; b.innerHTML = '<span></span><small></small>';
+      b.firstChild.textContent = label; b.lastChild.textContent = sub;
+      if (steps) b.onclick = () => { jumpHistory(steps); updHistory(); }; else b.setAttribute('aria-current', 'step');
+      box.appendChild(b);
+    };
+    row('Start', 'as the take was opened', undo.length, undo.length ? '' : 'cur');
+    undo.forEach((e, i) => row(e.label, ago(e.t), undo.length - 1 - i, i === undo.length - 1 ? 'cur' : ''));
+    for (let i = redo.length - 1; i >= 0; i--) row(redo[i].label, 'undone \u00b7 ' + ago(redo[i].t), -(redo.length - i), 'undone');
+    const cur = box.querySelector('[aria-current]'); if (cur) cur.scrollIntoView({ block: 'nearest' });
+  }
+  function updButtons() { $('undoBtn').disabled = !undo.length; $('redoBtn').disabled = !redo.length; updHistory(); const has = !!P.x; for (const id of ['exportBtn', 'saveBtn', 'correctBtn', 'playBtn', 'fitBtn']) $(id).disabled = !has; }
 
   // ---------- audio engine
   let ctx = null, bufO = null, bufE = null, src = null, srcGain = null, playing = false, ctxT0 = 0, pos0 = 0, pos = 0;
@@ -3732,12 +3931,12 @@ const DSP = (() => {
     autosaveSoon();
   }
   function scheduleRender() { renderPending = true; clearTimeout(renderTimer); renderTimer = setTimeout(doRender, 90); }
-  let renderGen = 0;
+  let renderGen = 0, outGen = 0;   // outGen: every render, even one that only put original audio back
   function doRender() {
     clearTimeout(renderTimer); renderPending = false;
     if (!P.x) return;
     P.prev = DSP.render(P.x, P.sr, P.A, P.marks, P.ctl, P.map, P.out, P.prev);
-    bufE = null; if (P.prev.spans) renderGen++;
+    bufE = null; if (P.prev.spans) renderGen++; outGen++;
     if (P.polished && !P.polished.stale && P.prev.spans) { P.polished.stale = true; updPolUi(); }
     if (playing && ui.ab === 'edit') swapSource();
     schedulePush();
@@ -3745,7 +3944,7 @@ const DSP = (() => {
 
   // ---------- settings that travel with a project
   function getSettings() {
-    return { key: ui.key, scale: ui.scale, bpm: ui.bpm, div: ui.div, grid: ui.grid, transMs: ui.transMs, snapScale: ui.snapScale, showOrig: ui.showOrig, declip: !!P.declip, ai: P.ai ? { on: !!P.ai.on, lim: P.ai.lim, protect: P.ai.protect !== false } : null, drawMove: ui.keepMove, sibDb: ui.sibDb, brDb: ui.brDb, evOff: [...ui.evOff], showEvents: ui.showEvents, audition: ui.audition, protectEdges: ui.protectEdges !== false, drawMode: ui.drawMode, polish: Object.assign({}, ui.pol), mix: Object.assign({}, ui.mix), harm: Object.assign({}, ui.harm), exp: Object.assign({}, ui.exp), live: Object.assign({}, ui.live || { on: false }), lyrText: ui.lyrText || '', lyrShow: ui.lyrShow !== false, auto: ui.auto, byp: ui.byp, slots: ui.slots, slot: ui.slot, backing: { vol: BK.vol, mute: BK.mute, offset: BK.offset } };
+    return { key: ui.key, scale: ui.scale, bpm: ui.bpm, div: ui.div, grid: ui.grid, transMs: ui.transMs, snapScale: ui.snapScale, showOrig: ui.showOrig, declip: !!P.declip, ai: P.ai ? { on: !!P.ai.on, lim: P.ai.lim, protect: P.ai.protect !== false } : null, drawMove: ui.keepMove, engSplit: !!ui.engSplit, sibDb: ui.sibDb, brDb: ui.brDb, evOff: [...ui.evOff], showEvents: ui.showEvents, audition: ui.audition, protectEdges: ui.protectEdges !== false, drawMode: ui.drawMode, polish: Object.assign({}, ui.pol), mix: Object.assign({}, ui.mix), harm: Object.assign({}, ui.harm), exp: Object.assign({}, ui.exp), live: Object.assign({}, ui.live || { on: false }), lyrText: ui.lyrText || '', lyrShow: ui.lyrShow !== false, auto: ui.auto, byp: ui.byp, slots: ui.slots, slot: ui.slot, backing: { vol: BK.vol, mute: BK.mute, offset: BK.offset } };
   }
   function applySettings(s) {
     if (!s) return;
@@ -3760,6 +3959,7 @@ const DSP = (() => {
     // drawn lines are followed exactly unless you choose otherwise (older saves stored a 40% default under another name)
     ui.keepMove = s.drawMove != null && isFinite(s.drawMove) ? Math.max(0, Math.min(1, +s.drawMove)) : 0;
     $('keepMove').value = Math.round(ui.keepMove * 100); $('keepMoveO').textContent = Math.round(ui.keepMove * 100) + '%';
+    ui.engSplit = !!s.engSplit; $('splitChk').checked = ui.engSplit; DSP.setStudioEngine(ui.engSplit);
     if (s.sibDb != null) ui.sibDb = +s.sibDb || 0;
     if (s.brDb != null) ui.brDb = +s.brDb || 0;
     if (Array.isArray(s.evOff)) ui.evOff = new Set(s.evOff.map(Number));
@@ -3849,7 +4049,7 @@ const DSP = (() => {
       if (notes.length && !(restore && restore.settings)) {
         const k = DSP.detectKey(notes); ui.key = k.key; ui.scale = k.mode === 'major' ? 'major' : 'minor';
         $('keySel').value = ui.key; $('scaleSel').value = ui.scale;
-        $('keyHint').textContent = 'Detected key: ' + KEYNAMES[k.key] + ' ' + (k.mode === 'major' ? 'major' : 'minor') + ' \u00b7 ' + notes.length + ' notes found.';
+        showKeyResult(k, notes.length + ' notes found.');
       } else if (notes.length) $('keyHint').textContent = restore && restore.carry ? notes.length + ' notes in the new comp \u00b7 ' + kept + ' kept their edits.' : notes.length + ' notes \u00b7 key and scale restored from the project.';
       else $('keyHint').textContent = 'No sung notes were found. Try a louder, drier take.';
       if (restore) applySettings(restore.settings);
@@ -3893,7 +4093,7 @@ const DSP = (() => {
   // ---------- Vocal polish, mix and master
   // runs in a background worker built from this page's own engine, so the editor stays responsive
   const POL_NUM = ['tone', 'even', 'deess', 'verb', 'size', 'lowcut', 'body', 'mud', 'presence', 'air', 'warmth', 'double', 'echo', 'echoBeats', 'chorus', 'slap', 'exciter', 'punch', 'deftone', 'denoise', 'hum', 'gate',
-    'choirAmt', 'choirN', 'choirSpread', 'choirDetune', 'choirWidth', 'choirLead', 'rideBack', 'rideRange', 'plosive', 'clicks', 'dereverb', 'roomRt', 'compThr', 'compRatio', 'compAtt', 'compRel', 'throwBeats', 'throwFb', 'throwLvl', 'htAmt', 'htSpeed', 'charSt', 'vocAmt', 'octDown', 'octUp'];
+    'choirAmt', 'choirN', 'choirSpread', 'choirDetune', 'choirWidth', 'choirLead', 'rideBack', 'rideRange', 'plosive', 'clicks', 'deessHz', 'dereverb', 'roomRt', 'compThr', 'compRatio', 'compAtt', 'compRel', 'throwBeats', 'throwFb', 'throwLvl', 'htAmt', 'htSpeed', 'charSt', 'vocAmt', 'octDown', 'octUp'];
   const POL_DEF = Object.assign({ tone: 1 }, DSP.POLISH_BASE, { throwBeats: 0.75, throwFb: 0.5, throwLvl: 0.8, htAmt: 0, htSpeed: 20, charSt: 0, vocAmt: 0, octDown: -24, octUp: -24, rideBack: 0, rideRange: 6 });
   const POL_STR = { verbType: 'plate', compMode: 'auto', compType: 'clean', vocChord: 'triad', choirParts: 'unison' };
   const clone = (o) => JSON.parse(JSON.stringify(o));
@@ -3942,10 +4142,17 @@ const DSP = (() => {
       } catch (err) { here(); }
     });
   }
+  // where this singer's "s" sounds sit (measured once per take; the de-esser centres on it)
+  function sibHz() {
+    if (!P.x || !P.A) return 0;
+    if (P.sibHz == null || P.sibHzOf !== P.x) { P.sibHzOf = P.x; P.sibHz = DSP.sibilanceHz(P.x, P.sr, P.A, P.events); }
+    return P.sibHz;
+  }
   const polOpts = () => {
     const o = { ref: ui.pol.ref, bpm: ui.bpm };
     for (const k of POL_NUM) o[k] = ui.pol[k];
     for (const k in POL_STR) o[k] = ui.pol[k];
+    if (!(o.deessHz > 0)) o.deessHz = sibHz() || 0;
     o.peq = clone(ui.pol.peq); o.dyn = clone(ui.pol.dyn); o.order = ui.pol.order.slice();
     o.sections = ui.auto.sections.map(c => ({ t0: c.t0, t1: c.t1, gainDb: c.gainDb || 0, verb: ui.byp['pnl-verb'] ? 0 : c.verb || 0, double: ui.byp['pnl-double'] ? 0 : c.double || 0, echo: ui.byp['pnl-echo'] ? 0 : c.echo || 0 }));
     o.throws = ui.auto.throws.map(t => [t[0], t[1]]);
@@ -4016,7 +4223,7 @@ const DSP = (() => {
   const fmtDb = (v) => (v > 0 ? '+' : v < 0 ? '\u2212' : '') + Math.abs(v).toFixed(1) + ' dB';
   const POL_UI = [
     ['polTone', 'tone', 100, v => Math.round(v * 100) + '%'], ['polEven', 'even', 100, v => Math.round(v * 100) + '%'],
-    ['polDeess', 'deess', 1, v => v + ' dB'], ['polVerb', 'verb', 100, v => Math.round(v * 100) + '%'], ['polSize', 'size', 1, v => (+v).toFixed(1) + ' s'],
+    ['polDeess', 'deess', 1, v => v + ' dB'], ['polDeessHz', 'deessHz', 1, v => v > 0 ? (v / 1000).toFixed(1) + ' kHz' : 'Auto' + (sibHz() ? ' \u00b7 ' + (sibHz() / 1000).toFixed(1) + ' kHz' : '')], ['polVerb', 'verb', 100, v => Math.round(v * 100) + '%'], ['polSize', 'size', 1, v => (+v).toFixed(1) + ' s'],
     ['polLowcut', 'lowcut', 1, v => Math.round(v) + ' Hz'], ['polBody', 'body', 1, fmtDb], ['polMud', 'mud', 1, fmtDb], ['polPresence', 'presence', 1, fmtDb], ['polAir', 'air', 1, fmtDb],
     ['polWarmth', 'warmth', 100, v => Math.round(v * 100) + '%'], ['polDouble', 'double', 100, v => Math.round(v * 100) + '%'], ['polEcho', 'echo', 100, v => Math.round(v * 100) + '%'],
     ['polChorus', 'chorus', 100, v => Math.round(v * 100) + '%'], ['polSlap', 'slap', 100, v => Math.round(v * 100) + '%'], ['polExciter', 'exciter', 100, v => Math.round(v * 100) + '%'], ['polPunch', 'punch', 100, v => Math.round(v * 100) + '%'],
@@ -4031,7 +4238,7 @@ const DSP = (() => {
     ['polChoirAmt', 'choirAmt', 100, v => v > 0 ? Math.round(v * 100) + '%' : 'Off'], ['polChoirN', 'choirN', 1, v => Math.round(v) + ' singers'], ['polChoirLead', 'choirLead', 1, v => v < 0 ? v + ' dB' : 'Out front'], ['polChoirSpread', 'choirSpread', 100, v => Math.round(v * 100) + '%'],
     ['polChoirDetune', 'choirDetune', 1, v => Math.round(v) + ' cents'], ['polChoirWidth', 'choirWidth', 100, v => Math.round(v * 100) + '%'],
     ['polRideBack', 'rideBack', 100, v => v > 0 ? Math.round(v * 100) + '%' : 'Off'], ['polRideRange', 'rideRange', 1, v => '\u00b1' + (+v).toFixed(1) + ' dB']];
-  const CLEAN_KEYS = new Set(['rideBack', 'rideRange', 'tone', 'denoise', 'hum', 'gate', 'plosive', 'clicks', 'dereverb', 'roomRt', 'throwFb', 'throwLvl']);
+  const CLEAN_KEYS = new Set(['rideBack', 'rideRange', 'tone', 'denoise', 'hum', 'gate', 'plosive', 'clicks', 'deessHz', 'dereverb', 'roomRt', 'throwFb', 'throwLvl']);
   {
     const sel = $('polPreset'), groups = {};
     for (const [k, v] of Object.entries(DSP.POLISH_PRESETS)) { const g = groups[v.group] ||= sel.appendChild(Object.assign(document.createElement('optgroup'), { label: v.group })); g.appendChild(new Option(v.name, k)); }
@@ -4062,7 +4269,7 @@ const DSP = (() => {
   }
   // ---- live effects in the GarageBand plug-in: the same settings, sent to the native chain
   if (!ui.live) ui.live = { on: false };
-  const LIVE_KEYS = ['lowcut', 'gate', 'even', 'punch', 'warmth', 'body', 'mud', 'presence', 'air', 'exciter', 'deess', 'verb', 'size', 'double', 'chorus', 'slap', 'echo', 'echoBeats'];
+  const LIVE_KEYS = ['lowcut', 'gate', 'even', 'punch', 'warmth', 'body', 'mud', 'presence', 'air', 'exciter', 'deess', 'deessHz', 'verb', 'size', 'double', 'chorus', 'slap', 'echo', 'echoBeats'];
   const LIVE_UI = [['verb', 'Reverb', 0, 100, 100, v => Math.round(v * 100) + '%'], ['size', 'Reverb length', 0.4, 4, 10, v => v.toFixed(1) + ' s'], ['echo', 'Echo', 0, 100, 100, v => Math.round(v * 100) + '%'],
     ['double', 'Doubler', 0, 100, 100, v => Math.round(v * 100) + '%'], ['even', 'Evenness (rider and compressor)', 0, 200, 100, v => Math.round(v * 100) + '%'], ['deess', 'De-esser', 0, 14, 1, v => v ? v.toFixed(0) + ' dB' : 'Off'],
     ['presence', 'Presence', -6, 6, 2, v => (v > 0 ? '+' : '') + v.toFixed(1) + ' dB'], ['air', 'Air', -6, 9, 2, v => (v > 0 ? '+' : '') + v.toFixed(1) + ' dB'], ['warmth', 'Warmth', 0, 100, 100, v => Math.round(v * 100) + '%'], ['lowcut', 'Low cut', 40, 300, 1, v => Math.round(v) + ' Hz']];
@@ -4117,12 +4324,12 @@ const DSP = (() => {
     $('liveStyle').disabled = !ui.live.on;
   }
   const polChanged = (fromControl) => {
-    updPolUi(); autosaveSoon(); if (PLUGIN) { updLiveUi(); sendLive(); }
+    updPolUi(); autosaveSoon(); if (PLUGIN) { updLiveUi(); sendLive(); schedulePush(); }
     if (ui.hearPol && P.polished && !P.polished.stale) rebuildSoon();
     else if (fromControl === true && P.x && P.A && !PLUGIN) { if (ui.ab !== 'edit') setAB('edit'); rebuildSoon(); }
     else if (P.polished) { P.polished.stale = true; updPolUi(); }
   };
-  for (const [id, key, sc] of POL_UI) $(id).addEventListener('input', () => { ui.pol[key] = +$(id).value / sc; if (!CLEAN_KEYS.has(key)) ui.pol.preset = 'custom'; polChanged(true); });
+  for (const [id, key, sc] of POL_UI) $(id).addEventListener('input', () => { ui.pol[key] = +$(id).value / sc; if (key === 'deessHz' && ui.pol[key] < 3000) ui.pol[key] = 0; if (!CLEAN_KEYS.has(key)) ui.pol.preset = 'custom'; polChanged(true); });
   $('polChoirParts').onchange = () => { ui.pol.choirParts = $('polChoirParts').value; ui.pol.preset = 'custom'; polChanged(true); };
   $('polVerbType').onchange = () => { ui.pol.verbType = $('polVerbType').value; ui.pol.preset = 'custom'; polChanged(true); };
   $('polHum').onchange = () => { ui.pol.hum = +$('polHum').value; polChanged(true); };
@@ -4409,14 +4616,14 @@ const DSP = (() => {
   $('midiPitch').onclick = () => {
     if (!P.guide) return;
     const amt = +$('midiAmt').value / 100, ns = ui.sel.size ? selNotes() : P.notes; let hit = 0;
-    pushUndo();
+    pushUndo('', 'Tune to MIDI');
     for (const n of ns) { if (n.follow) continue; const gn = guideFor(n); if (!gn) continue; n.shift += (gn.m * 100 - noteCentre(n)) * amt; hit++; }
     changed(true); notice('Snapped ' + hit + ' of ' + ns.length + ' notes to the guide pitch' + (hit < ns.length ? '; the rest had no guide note under them.' : '.'));
   };
   $('midiTime').onclick = () => {
     if (!P.guide) return;
     const amt = +$('midiAmt').value / 100, fps = frPerSec(), idx = ui.sel.size ? [...ui.sel].sort((a, b) => a - b) : P.notes.map((_, i) => i);
-    pushUndo(); const used = new Set(); let hit = 0;
+    pushUndo('', 'Time to MIDI'); const used = new Set(); let hit = 0;
     for (const i of idx) {
       const n = P.notes[i], gn = guideFor(n); if (!gn || used.has(gn)) continue; used.add(gn);
       const d = (gn.t0 * fps - n.os) * amt; n.os += d; n.oe += d; hit++;
@@ -4428,7 +4635,14 @@ const DSP = (() => {
     if (!P.A || !P.notes.length) return;
     const fps = frPerSec(), pk = P.A.peakDb;
     const ns = P.notes.filter(n => !n.muted).map(n => { let l = -120; for (let i = n.s; i <= n.e; i++) l = Math.max(l, P.A.rmsDb[i]); return { t0: n.os / fps, t1: n.oe / fps, m: Math.max(0, Math.min(127, Math.round(noteCentre(n) / 100))), vel: Math.max(20, Math.min(127, Math.round(127 + (l - pk) * 2.5))) }; });
+    // in GarageBand the file starts at bar 1 of the song, like the audio exports
+    if (PLUGIN && plugStart > 0) { const off = plugStart / P.sr; for (const n of ns) { n.t0 += off; n.t1 += off; } }
     const mid = DSP.writeMidi(ns, ui.bpm), base = baseName();
+    if (NATIVE) {
+      try { await saveToMac([{ name: (base || 'Sudz') + ' notes.mid', bytes: mid }], PLUGIN ? (base.replace(/\.[^.]+$/, '') || 'Sudz export') : 'Exports'); notice('Saved ' + ns.length + ' notes as MIDI at ' + (+ui.bpm.toFixed(2)) + ' BPM in <b>Music \u203a Sudz</b> (opened in Finder).' + (PLUGIN ? ' Drag it onto a software instrument track at <b>bar 1</b>; it lines up with your vocal when GarageBand\u2019s tempo is ' + (+ui.bpm.toFixed(2)) + ' BPM.' : '')); }
+      catch (e) { notice('The MIDI file could not be saved (' + (e.message || e) + ').'); }
+      return;
+    }
     const dl = await dlP;
     const r = dl ? await offerFile(base + ' notes.zip', DSP.zipFiles([{ name: base + ' notes.mid', bytes: mid }])) : await offerFile(base + ' notes.mid', new Blob([mid], { type: 'audio/midi' }));
     if (r === 'saved') notice('Exported ' + ns.length + ' notes as MIDI at ' + (+ui.bpm.toFixed(2)) + ' BPM' + (dl ? ' (inside a ZIP, the only way this preview can hand files over)' : '') + '. Drag it onto a software instrument track to double the vocal.');
@@ -4457,8 +4671,39 @@ const DSP = (() => {
   const ORT_LEGACY = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.16.3/dist/ort.wasm-core.min.js';
   const wasmSimd = (() => { try { return WebAssembly.validate(new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0, 1, 5, 1, 96, 0, 1, 123, 3, 2, 1, 0, 10, 10, 1, 8, 0, 65, 0, 253, 15, 253, 98, 11])); } catch (e) { return false; } })();
   if (!P.ai) P.ai = { on: false, lim: 42, protect: true };
+  // ---- native AI: the plug-in and the Sudz app can run the networks with ONNX Runtime on the Mac itself
+  const NAI = { info: null };
+  async function nativeAi(fresh) {
+    if (!NATIVE) return null;
+    if (!NAI.info || fresh) { try { NAI.info = await nativeCall('pwAiInfo'); } catch (e) { NAI.info = null; } }
+    return NAI.info && NAI.info.available ? NAI.info : null;
+  }
+  function b64f32(s) { const bin = atob(s), u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i); return new Float32Array(u8.buffer); }
+  const tensorJson = (t) => ({ dims: t[1], b64: f32b64(t[0] instanceof Float32Array ? t[0] : Float32Array.from(t[0])) });
+  // the three clean-up networks run as one native call per chunk; the page's own code asks for them one at a time
+  const nativeDfnRunner = () => {
+    let got = null;
+    return async (name, feeds) => {
+      if (name === 'enc') {
+        const r = await nativeCall('pwAiRun', 'enc,erb_dec,df_dec', JSON.stringify({ inputs: { feat_erb: tensorJson(feeds.feat_erb), feat_spec: tensorJson(feeds.feat_spec) }, want: ['lsnr', 'm', 'coefs'] }));
+        if (!r || r.error || !r.outputs) throw new Error('native AI: ' + ((r && r.error) || 'no answer'));
+        got = {}; for (const k in r.outputs) got[k] = [b64f32(r.outputs[k].b64), r.outputs[k].dims];
+        await new Promise(res => setTimeout(res, 0));
+        return { lsnr: got.lsnr };
+      }
+      if (name === 'erb_dec') return { m: got.m };
+      if (name === 'df_dec') return { coefs: got.coefs };
+      throw new Error('unknown network ' + name);
+    };
+  };
   async function aiEngine(say) {
     if (AIE.sess) return AIE.sess;
+    if (NATIVE && !AIE.noNative && await nativeAi()) {
+      say('Starting the AI engine on your Mac\u2026', 0.5);
+      const r = await nativeCall('pwAiLoad', 'dfn');
+      if (r && r.ok) { AIE.sess = { native: true }; return AIE.sess; }
+      AIE.noNative = true; AIE.nativeErr = (r && r.error) || 'unknown';
+    }
     if (location.protocol === 'file:' && !NATIVE) throw Object.assign(new Error('AI clean-up needs the online version of Sudz (the desktop copy can\u2019t load the model from your disk).'), { user: true });
     if (!AIE.loading) AIE.loading = (async () => {
       // in the GarageBand plug-in everything ships inside the plug-in (works offline)
@@ -4487,7 +4732,7 @@ const DSP = (() => {
     })();
     try { return await AIE.loading; } catch (e) { AIE.loading = null; throw e; }
   }
-  const aiRunner = (sess) => async (name, feeds) => {
+  const aiRunner = (sess) => sess.native ? nativeDfnRunner() : async (name, feeds) => {
     const f = {}; for (const k in feeds) f[k] = new ort.Tensor('float32', feeds[k][0], feeds[k][1]);
     const r = await sess[name].run(f), o = {}; for (const k in r) o[k] = [r[k].data, r[k].dims];
     await new Promise(res => setTimeout(res, 0));          // let the page breathe between chunks
@@ -4502,8 +4747,16 @@ const DSP = (() => {
     try {
       const sess = await aiEngine(say);
       const t0 = performance.now();
-      const r = await DSP.aiDenoise(base, P.sr, P.ai.protect ? P.A : null, aiRunner(sess), { limDb: P.ai.lim >= 42 ? 100 : P.ai.lim, protect: 1 },
-        async (fr) => { say('AI clean-up: listening through the take\u2026 ' + Math.round(fr * 100) + '%', fr); await tick(); });
+      const go = (s) => DSP.aiDenoise(base, P.sr, P.ai.protect ? P.A : null, aiRunner(s), { limDb: P.ai.lim >= 42 ? 100 : P.ai.lim, protect: 1 },
+        async (fr) => { say('AI clean-up' + (s.native ? ' (on your Mac)' : '') + ': listening through the take\u2026 ' + Math.round(fr * 100) + '%', fr); await tick(); });
+      let r;
+      try { r = await go(sess); }
+      catch (e) {
+        if (!sess.native) throw e;
+        // the native engine failed: fall back to the one built into the page
+        AIE.noNative = true; AIE.nativeErr = String(e && e.message || e); AIE.sess = null;
+        r = await go(await aiEngine(say));
+      }
       aiCache = { base, lim: P.ai.lim, protect: P.ai.protect, y: r.y, ms: performance.now() - t0 };
       return r.y;
     } finally { ov.hidden = true; }
@@ -4599,7 +4852,7 @@ const DSP = (() => {
     if (!lines.length) return 'Type or paste the lyrics first.';
     // line by line when the line count matches the phrases; otherwise as one stream
     const groups = lines.length === phrases.length ? phrases.map((p, i) => [p, lines[i]]) : [[notes, lines.flat()]];
-    pushUndo('lyrics');
+    pushUndo('lyrics', 'Lyrics');
     for (const n of P.notes) n.lyric = '';
     let held = 0;
     for (const [ns, syl] of groups) {
@@ -4618,12 +4871,12 @@ const DSP = (() => {
   }
   function updLyrUi() { $('lyrText').value = ui.lyrText || ''; $('lyrShow').checked = ui.lyrShow !== false; $('lyrApply').disabled = !P.A; }
   $('lyrApply').onclick = () => { ui.lyrText = $('lyrText').value; $('lyrHint').textContent = applyLyrics(ui.lyrText); autosaveSoon(); };
-  $('lyrClear').onclick = () => { pushUndo('lyrics'); for (const n of P.notes) n.lyric = ''; changed(false); requestDraw(); $('lyrHint').textContent = 'Words removed.'; };
+  $('lyrClear').onclick = () => { pushUndo('lyrics', 'Lyrics'); for (const n of P.notes) n.lyric = ''; changed(false); requestDraw(); $('lyrHint').textContent = 'Words removed.'; };
   $('lyrShow').onchange = () => { ui.lyrShow = $('lyrShow').checked; requestDraw(); autosaveSoon(); };
   $('lyrText').addEventListener('input', () => { ui.lyrText = $('lyrText').value; autosaveSoon(); });
   $('lyrText').addEventListener('keydown', (e) => e.stopPropagation());
   $('nLyric').addEventListener('keydown', (e) => e.stopPropagation());
-  $('nLyric').addEventListener('change', () => { const v = $('nLyric').value.trim(); const ns = selNotes(); if (!ns.length) return; pushUndo('lyric'); ns.forEach((n, i) => { n.lyric = i === 0 ? v : ''; }); changed(false); requestDraw(); });
+  $('nLyric').addEventListener('change', () => { const v = $('nLyric').value.trim(); const ns = selNotes(); if (!ns.length) return; pushUndo('lyric', 'Word'); ns.forEach((n, i) => { n.lyric = i === 0 ? v : ''; }); changed(false); requestDraw(); });
   new MutationObserver(() => { if (!$('pnl-lyrics').hidden) updLyrUi(); }).observe($('pnl-lyrics'), { attributes: true, attributeFilter: ['hidden'] });
 
   // ---------- clip repair
@@ -5034,12 +5287,43 @@ const DSP = (() => {
     try { const m = await store.get('splitModel'); if (m && m.bytes && m.bytes.byteLength > 1e8) { SPLIT.model = m.bytes; return m.bytes; } } catch (e) { }
     return null;
   }
+  // on the Mac (plug-in and app) the model lives in Sudz's own folder and runs natively
+  async function splitNativeInfo() { const inf = await nativeAi(true); return inf && inf.split ? inf : null; }
   async function updSplitUi() {
-    const m = await splitModelBytes();
-    $('splitModel').textContent = m ? 'Ready (' + Math.round(m.byteLength / 1e6) + ' MB, kept in this browser).' : 'Not loaded yet.';
+    const nat = NATIVE ? await nativeAi(true) : null;
+    $('splitModelIn').dataset.native = nat ? '1' : '';
+    const m = nat ? (nat.split ? { byteLength: nat.splitMB * 1e6 } : null) : await splitModelBytes();
+    $('splitModel').textContent = m ? 'Ready (' + Math.round(m.byteLength / 1e6) + ' MB' + (nat ? ', installed in Sudz, runs on your Mac' : ', kept in this browser') + ').' : 'Not loaded yet.';
     $('splitModelHelp').hidden = !!m; $('splitModelLbl').textContent = m ? 'Replace the model file\u2026' : 'Choose the model file\u2026';
     $('splitLbl').classList.toggle('disabled', !m || SPLIT.busy); $('splitIn').disabled = !m || SPLIT.busy;
     $('splitCancel').hidden = !SPLIT.busy; $('splitProg').hidden = !SPLIT.busy; $('splitResults').hidden = !SPLIT.res || SPLIT.busy;
+  }
+  $('splitModelLbl').addEventListener('click', async (e) => {
+    if ($('splitModelIn').dataset.native !== '1') return;
+    e.preventDefault(); e.stopPropagation();
+    const r = await nativeCall('pwAiInstallSplit'); if (!r) return;
+    if (r.error) notice(r.error); else notice('The separation model is installed in Sudz (' + Math.round(r.mb) + ' MB). You can delete the downloaded copy.');
+    updSplitUi();
+  });
+  // native separation: the same segments and cross-fades as the in-browser worker, each segment run on the Mac
+  async function splitNative(L, R, onProgress) {
+    const ld = await nativeCall('pwAiLoad', 'split'); if (!ld || !ld.ok) throw new Error((ld && ld.error) || 'the separation engine didn\u2019t start');
+    const total = L.length, N = 343980, ov = N >> 2, stride = N - ov, n = Math.max(1, Math.ceil(total / stride));
+    const win = new Float32Array(N).fill(1); for (let i = 0; i < ov; i++) { win[i] = i / (ov - 1); win[N - 1 - i] = i / (ov - 1); }
+    const oL = new Float32Array(total), oR = new Float32Array(total), w = new Float32Array(total), x = new Float32Array(2 * N);
+    for (let k = 0; k < n; k++) {
+      if (!SPLIT.busy) throw new Error('stopped');
+      const a = k * stride, b = Math.min(a + N, total), len = b - a;
+      x.fill(0); x.set(L.subarray(a, b), 0); x.set(R.subarray(a, b), N);
+      const r = await nativeCall('pwAiRun', 'split', JSON.stringify({ inputs: { mix: { dims: [1, 2, N], b64: f32b64(x) } }, want: ['stems'], pick: { stems: [3 * 2 * N, 2 * N] } }));
+      if (!r || r.error || !r.outputs) throw new Error((r && r.error) || 'no answer from the engine');
+      const d = b64f32(r.outputs.stems.b64);    // the vocals stem: left, then right
+      for (let i = 0; i < len; i++) { const g = win[i]; oL[a + i] += d[i] * g; oR[a + i] += d[N + i] * g; w[a + i] += g; }
+      onProgress(k + 1, n);
+      if (b >= total) break;
+    }
+    for (let i = 0; i < total; i++) { const q = 1 / Math.max(w[i], 1e-8); oL[i] *= q; oR[i] *= q; }
+    return { L: oL, R: oR };
   }
   $('splitModelIn').addEventListener('change', async (e) => {
     const f = e.target.files[0]; e.target.value = ''; if (!f) return;
@@ -5079,9 +5363,17 @@ const DSP = (() => {
       let L = buf.getChannelData(0), R = buf.numberOfChannels > 1 ? buf.getChannelData(1) : buf.getChannelData(0);
       if (buf.sampleRate !== 44100) { L = DSP.resample(L, buf.sampleRate, 44100); R = DSP.resample(R, buf.sampleRate, 44100); }
       L = Float32Array.from(L); R = Float32Array.from(R);
-      const w = await splitWorker(say), t0 = performance.now(), mixL = L.slice(), mixR = R.slice();
+      const nat = NATIVE && await splitNativeInfo(), mixL = L.slice(), mixR = R.slice();
+      const prog = (t0, done, of) => {
+        $('splitProg').value = done / of; const el = (performance.now() - t0) / 1000, left = el / done * (of - done);
+        say('Listening for the vocal' + (nat ? ' (on your Mac)' : '') + '\u2026 ' + Math.round(100 * done / of) + '% \u00b7 about ' + (left > 90 ? Math.round(left / 60) + ' min' : Math.max(5, Math.round(left / 5) * 5) + ' s') + ' left');
+      };
+      let out, t0 = performance.now();
+      if (nat) { say('Listening for the vocal (on your Mac)\u2026 0%'); out = await splitNative(L, R, (d, o) => prog(t0, d, o)); }
+      else {
+      const w = await splitWorker(say); t0 = performance.now();
       say('Listening for the vocal\u2026 0%');
-      const out = await new Promise((res, rej) => {
+      out = await new Promise((res, rej) => {
         w.onmessage = (ev) => {
           const d = ev.data;
           if (d.type === 'progress') {
@@ -5091,6 +5383,7 @@ const DSP = (() => {
         };
         w.postMessage({ type: 'run', L, R }, [L.buffer, R.buffer]);
       });
+      }
       const n = out.L.length, bL = new Float32Array(n), bR = new Float32Array(n);
       for (let i = 0; i < n; i++) { bL[i] = mixL[i] - out.L[i]; bR[i] = mixR[i] - out.R[i]; }
       SPLIT.res = { vL: out.L, vR: out.R, bL, bR, sr: 44100 };
@@ -5781,7 +6074,7 @@ const DSP = (() => {
       return;
     }
     if (ui.tool === 'draw' && P.A) {
-      pushUndo();
+      pushUndo('', 'Draw pitch');
       const j = T(x) * frPerSec(), c = Cc(y), mode = e.altKey ? 'free' : ui.drawMode;
       if (mode === 'line' || mode === 'curve') { ui.drag = { type: 'draw', mode, erase: false, pts: [[j, c]], j0: j, c0: c, j1: j, c1: c, touched: new Set() }; requestDraw(); return; }
       const c0 = mode === 'note' ? snapTarget(c, true) : c;
@@ -5830,7 +6123,7 @@ const DSP = (() => {
     if (d.type === 'pitch') {
       const dc = -(y - d.y0) / ppc();
       if (!d.moved && Math.abs(y - d.y0) < 3) return;
-      if (!d.undone) { pushUndo(); d.undone = true; }
+      if (!d.undone) { pushUndo('', 'Move pitch'); d.undone = true; }
       d.moved = true;
       const single = d.start.length === 1;
       for (const [i, s0] of d.start) {
@@ -5857,7 +6150,7 @@ const DSP = (() => {
     }
     if (d.type === 'time') {
       if (!d.moved && Math.abs(x - d.x0) < 3) return;
-      if (!d.undone) { pushUndo(); d.undone = true; }
+      if (!d.undone) { pushUndo('', 'Move or stretch timing'); d.undone = true; }
       d.moved = true;
       let df = (x - d.x0) / view.pps * frPerSec();
       const useGrid = ui.grid && !e.altKey;
@@ -5892,12 +6185,12 @@ const DSP = (() => {
     if (d && d.type === 'pan') cv.style.cursor = ui.tool === 'hand' ? 'grab' : 'default';
     if (d && d.type === 'erase') {
       const moved = Math.abs((d.x1 ?? d.x0) - d.x0) > 3;
-      if (!moved && d.hitCut >= 0) { pushUndo(); P.cuts.splice(d.hitCut, 1); changed(true); notice('Brought back the erased stretch.'); return; }
+      if (!moved && d.hitCut >= 0) { pushUndo('', 'Bring back erased stretch'); P.cuts.splice(d.hitCut, 1); changed(true); notice('Brought back the erased stretch.'); return; }
       if (!moved) { requestDraw(); return; }
       let a = Math.max(0, Math.min(d.t0, d.t1)), b = Math.min(dur(), Math.max(d.t0, d.t1));
       if (ui.grid && !d.alt) { const gs = gridSec(); a = Math.round(a / gs) * gs; b = Math.round(b / gs) * gs; }
       if (b - a < 0.01) { requestDraw(); return; }
-      pushUndo();
+      pushUndo('', 'Erase');
       // merge with any erased stretches it touches
       let cuts = (P.cuts || []).concat([[a, b]]).sort((p, q) => p[0] - q[0]), out = [];
       for (const c of cuts) { const l = out[out.length - 1]; if (l && c[0] <= l[1] + 0.005) l[1] = Math.max(l[1], c[1]); else out.push([c[0], c[1]]); }
@@ -5945,7 +6238,7 @@ const DSP = (() => {
   // ---------- note operations
   function splitAt(k, fr, opts = {}) {
     const n = P.notes[k]; if (!n || fr - n.s < 4 || n.e - fr < 4) return false;
-    if (!opts.quiet) pushUndo();
+    if (!opts.quiet) pushUndo('', 'Split note');
     const mid = outFr(n, fr);
     const a = Object.assign(DSP.newNote(n.s, fr - 1), pick(n), { os: n.os, oe: mid }), b = Object.assign(DSP.newNote(fr, n.e), pick(n), { os: mid, oe: n.oe, trans: null });
     if (n.pd) { a.pd = n.pd.slice(0, fr - n.s); b.pd = n.pd.slice(fr - n.s); if (!a.pd.some(v => v != null)) delete a.pd; if (!b.pd.some(v => v != null)) delete b.pd; }
@@ -5983,7 +6276,7 @@ const DSP = (() => {
   const pick = (n) => ({ ...(n.muted ? { muted: true } : {}), ...(n.follow ? { follow: true } : {}), shift: n.shift, driftAmt: n.driftAmt, vibAmt: n.vibAmt, formant: n.formant, gainDb: n.gainDb, sibDb: n.sibDb || 0, trans: n.trans == null ? null : n.trans });
   function mergeSel() {
     const ks = [...ui.sel].sort((a, b) => a - b); if (ks.length < 2) return;
-    pushUndo();
+    pushUndo('', 'Join notes');
     const first = P.notes[ks[0]], last = P.notes[ks[ks.length - 1]];
     const m = DSP.derive(Object.assign(DSP.newNote(first.s, last.e), pick(first), { os: first.os, oe: last.oe }), P.A);
     m.shift = first._c0 + first.shift - m._c0;
@@ -5996,7 +6289,7 @@ const DSP = (() => {
     ui.sel = new Set([ks[0]]); changed(true);
   }
   function selNotes() { return [...ui.sel].map(i => P.notes[i]).filter(Boolean); }
-  function applySel(key, fn) { const ns = selNotes(); if (!ns.length) return; pushUndo(key); ns.forEach(fn); changed(false); }
+  function applySel(key, fn, label) { const ns = selNotes(); if (!ns.length) return; pushUndo(key, label || UNDO_LABELS[key] || 'Note settings'); ns.forEach(fn); changed(false); }
   // after a batch timing change: keep notes in order, non-overlapping, and inside the take
   function resolveTiming() {
     const ns = P.notes, mx = maxFr();
@@ -6024,8 +6317,8 @@ const DSP = (() => {
     $(id).addEventListener('input', () => { const v = parseFloat($(id).value); applySel(id, n => sliders[id](n, v)); });
     $(id).addEventListener('change', () => doRender());
   }
-  $('semiUp').onclick = () => { applySel('', n => n.shift += 100); doRender(); };
-  $('semiDn').onclick = () => { applySel('', n => n.shift -= 100); doRender(); };
+  $('semiUp').onclick = () => { applySel('semi', n => n.shift += 100); doRender(); };
+  $('semiDn').onclick = () => { applySel('semi', n => n.shift -= 100); doRender(); };
   $('centreBtn').onclick = () => { applySel('', n => sliders.fine(n, 0)); doRender(); };
   $('resetBtn').onclick = () => { applySel('', n => { Object.assign(n, { shift: 0, driftAmt: 1, vibAmt: 1, formant: 0, gainDb: 0, sibDb: 0, trans: null }); delete n.pd; }); doRender(); };
   $('clearDrawBtn').onclick = () => { applySel('', n => { delete n.pd; }); doRender(); };
@@ -6053,7 +6346,7 @@ const DSP = (() => {
     if (!ui.sel.size) { notice('Select the notes you want to split first, then press <b>Split at pitch changes</b>.'); return; }
     const ks = [...ui.sel].sort((a, b) => b - a), plan = ks.map(k => [k, pitchCuts(P.notes[k])]), total = plan.reduce((s, q) => s + q[1].length, 0);
     if (!total) { notice('No pitch changes big enough to split were found in the selected notes. Use the <b>Split tool</b> (press 4) to cut by hand.'); return; }
-    pushUndo(); const newSel = [];
+    pushUndo('', 'Split at pitch changes'); const newSel = [];
     for (const [k, cuts] of plan) { for (let c = cuts.length - 1; c >= 0; c--) splitAt(k, cuts[c], { quiet: true }); }
     // re-select every piece of the notes that were split
     const firstK = Math.min(...ks); let idx = firstK; const sel = new Set();
@@ -6066,7 +6359,7 @@ const DSP = (() => {
   $('glideAuto').onclick = () => { applySel('', n => { n.trans = null; }); doRender(); };
   function extendSel(mode, deltaMs) {
     const idx = [...ui.sel].sort((a, b) => a - b); if (!idx.length || !P.A) return;
-    pushUndo();
+    pushUndo('', 'Lengthen or shorten notes');
     const fps = frPerSec(); let changedN = 0, blocked = 0, capped = 0;
     for (const i of idx) {
       const n = P.notes[i], next = P.notes[i + 1], lenIn = n.e + 1 - n.s;
@@ -6097,7 +6390,7 @@ const DSP = (() => {
   $('quantBtn').onclick = () => {
     if (!P.A || !P.notes.length) return;
     const amt = +$('qAmt').value / 100, idx = ui.sel.size ? [...ui.sel].sort((a, b) => a - b) : P.notes.map((_, i) => i);
-    pushUndo();
+    pushUndo('', 'Quantize timing');
     for (const i of idx) { const n = P.notes[i], d = (snapGridFr(n.os) - n.os) * amt; n.os += d; n.oe += d; }
     resolveTiming();
     if (!ui.grid) { ui.grid = true; $('showGrid').checked = true; }
@@ -6106,7 +6399,7 @@ const DSP = (() => {
   function nudgeTime(dFr) {
     const idx = [...ui.sel].sort((a, b) => a - b); if (!idx.length) return;
     const [lo, hi] = moveLimits(idx), df = Math.max(lo, Math.min(hi, dFr)); if (!df) return;
-    pushUndo('tnudge'); for (const i of idx) { P.notes[i].os += df; P.notes[i].oe += df; } changed(false);
+    pushUndo('tnudge', 'Nudge timing'); for (const i of idx) { P.notes[i].os += df; P.notes[i].oe += df; } changed(false);
   }
   $('mergeBtn').onclick = mergeSel;
   $('splitBtn').onclick = () => {
@@ -6181,14 +6474,145 @@ const DSP = (() => {
   }
   $('slidesBtn').onclick = () => {
     if (!P.A) return;
-    pushUndo(); const c = makeSlidesNatural(ui.sel.size ? selNotes() : P.notes); changed(true);
+    pushUndo('', 'Natural slides'); const c = makeSlidesNatural(ui.sel.size ? selNotes() : P.notes); changed(true);
     notice(c ? 'Made ' + c + ' slide' + (c > 1 ? 's' : '') + ' natural again (including tiny pieces under 40 ms at the edges of short syllables): they now follow the notes either side and keep the shape you sang.' : 'All the slides already follow their notes.');
+  };
+  // ---------- line a double or harmony up with the lead
+  const AL = { lead: null, name: '', off: 0 };   // lead: mono audio at P.sr; off: where it starts, in this take's samples
+  function alReady() { $('alGo').disabled = !(P.A && P.notes.length && (PLUGIN ? $('alPeer').value : AL.lead)); }
+  async function updAlignPeers() {
+    if (!PLUGIN) { alReady(); return; }
+    const r = await nativeCall('pwListPeers'), sel = $('alPeer'), keep = sel.value; sel.innerHTML = '';
+    const peers = (r && r.peers) || [];
+    peers.forEach((q, i) => {
+      const a = q.start / (q.rate || P.sr || 44100), b = (q.start + q.length) / (q.rate || P.sr || 44100);
+      sel.add(new Option((q.name || 'Sudz on another track') + ' \u00b7 ' + fmtTime(a).replace(/\.\d+$/, '') + '\u2013' + fmtTime(b).replace(/\.\d+$/, ''), String(q.id)));
+    });
+    if ([...sel.options].some(o => o.value === keep)) sel.value = keep;
+    $('alPeerHint').textContent = peers.length ? 'Pick the track with the lead vocal (it needs Sudz on it, with its part transferred).' : 'No other tracks with Sudz found. Put Sudz on the lead vocal track too and transfer the lead, then come back here.';
+    alReady();
+  }
+  $('alPeer').onchange = alReady;
+  bindOut('alAmt', v => v + '%');
+  $('alFileIn').addEventListener('change', async (e) => {
+    const f = e.target.files[0]; e.target.value = ''; if (!f || !P.sr) return;
+    try {
+      const d = await decodeFileMono(f);
+      AL.lead = d.sr === P.sr ? d.x : DSP.resample(d.x, d.sr, P.sr); AL.name = f.name; AL.off = 0;
+      $('alFileName').textContent = 'Lead: ' + f.name; alReady();
+    } catch (err) { $('alHint').textContent = 'That file could not be read.'; }
+  });
+  $('alGo').onclick = async () => {
+    if (!P.A || !P.notes.length) return;
+    let lead = AL.lead, off = AL.off;
+    $('alGo').disabled = true; $('alHint').textContent = 'Listening to both takes\u2026';
+    try {
+      if (PLUGIN) {
+        const id = $('alPeer').value, peers = ((await nativeCall('pwListPeers')) || {}).peers || [], q = peers.find(o => String(o.id) === id);
+        if (!q) throw new Error('that track is no longer there');
+        const w = DSP.parseWav(await (await fetch('peer/' + id + '.wav')).arrayBuffer()); if (!w) throw new Error('the lead could not be read');
+        lead = w.sr === P.sr ? w.ch[0] : DSP.resample(w.ch[0], w.sr, P.sr);
+        off = Math.round((q.start - plugStart) * P.sr / (q.rate || P.sr));
+      }
+      await new Promise(r => setTimeout(r, 30));
+      const N = P.x.length, seg = new Float32Array(N); let overlap = 0;
+      for (let i = 0; i < N; i++) { const j = i - off; if (j >= 0 && j < lead.length) { seg[i] = lead[j]; overlap++; } }
+      if (overlap < P.sr) throw new Error('the lead doesn\u2019t overlap this take on the timeline');
+      const M = DSP.alignMap(seg, P.x, P.sr), hop = P.A.hop, amt = +$('alAmt').value / 100;
+      const idx = (ui.sel.size ? [...ui.sel] : P.notes.map((_, i) => i)).filter(i => !P.notes[i].muted);
+      const LA = $('alPitch').checked ? await DSP.analyse(seg, P.sr) : null;
+      pushUndo('', 'Line up with the lead');
+      let before = 0, after = 0, moved = 0, tuned = 0;
+      for (const i of idx) {
+        const n = P.notes[i], ts = DSP.invF(M, n.s * hop) / hop, te = DSP.invF(M, (n.e + 1) * hop) / hop;
+        if (!isFinite(ts) || !isFinite(te) || te <= ts) continue;
+        before += Math.abs(n.os - ts);
+        const ds = (ts - n.os) * amt, de = (te - n.oe) * amt; n.os += ds; n.oe += de;
+        after += Math.abs(n.os - ts); if (Math.abs(ds) > 0.5 || Math.abs(de) > 0.5) moved++;
+        if (LA) {
+          const c = []; for (let f = Math.max(0, Math.round(ts)); f <= Math.min(LA.nf - 1, Math.round(te)); f++) if (LA.voiced[f]) c.push(LA.cents[f]);
+          if (c.length >= 4) { c.sort((a, b) => a - b); const diff = c[c.length >> 1] - noteCentre(n); if (Math.abs(diff) < 250 && !n.follow) { n.shift += diff * amt; tuned++; } }
+        }
+      }
+      resolveTiming(); changed(true);
+      const ms = (v) => Math.round(v / Math.max(1, idx.length) * hop / P.sr * 1000);
+      $('alHint').textContent = 'Moved ' + moved + ' of ' + idx.length + ' notes. Average distance from the lead: ' + ms(before) + ' ms before, ' + ms(after) + ' ms now' + (LA ? '; ' + tuned + ' notes matched to its pitch' : '') + '.';
+    } catch (err) { $('alHint').textContent = 'Couldn\u2019t line up: ' + (err.message || err) + '.'; }
+    alReady();
+  };
+
+  // ---------- singer presets: kept in this browser, or (plug-in and app) in a file both of them share
+  const SG_KEYS = ['transMs', 'drawMove', 'sibDb', 'brDb', 'protectEdges', 'polish', 'byp', 'live'];
+  async function loadSingers() {
+    try {
+      const txt = NATIVE ? await nativeCall('pwLoadPrefs', 'singers') : localStorage.getItem('sudz.singers');
+      const a = txt ? JSON.parse(txt) : []; return Array.isArray(a) ? a.filter(q => q && q.name && q.s) : [];
+    } catch (e) { return []; }
+  }
+  async function saveSingers(list) {
+    const txt = JSON.stringify(list);
+    try { if (NATIVE) await nativeCall('pwSavePrefs', 'singers', txt); else localStorage.setItem('sudz.singers', txt); return true; } catch (e) { return false; }
+  }
+  async function updSingers() {
+    const list = await loadSingers(), box = $('sgList'); box.innerHTML = '';
+    $('sgHint').textContent = list.length ? '' : 'No singers saved yet.' + (NATIVE ? ' Singers you save here also appear in the Sudz app and in Sudz inside GarageBand.' : ' They are kept in this browser.');
+    list.forEach((q, i) => {
+      const c = document.createElement('div'); c.className = 'card';
+      const nm = document.createElement('span'); nm.textContent = q.name; nm.title = 'Saved ' + new Date(q.t || Date.now()).toLocaleString();
+      const ld = document.createElement('button'); ld.textContent = 'Load'; ld.className = 'primary';
+      ld.onclick = () => applySinger(q);
+      const del = document.createElement('button'); del.textContent = 'Delete'; del.setAttribute('aria-label', 'Delete ' + q.name);
+      del.onclick = async () => {
+        if (del.dataset.sure !== '1') { del.dataset.sure = '1'; del.textContent = 'Delete?'; setTimeout(() => { del.dataset.sure = ''; del.textContent = 'Delete'; }, 3000); return; }
+        list.splice(i, 1); await saveSingers(list); updSingers();
+      };
+      c.append(nm, ld, del); box.appendChild(c);
+    });
+  }
+  function applySinger(q) {
+    const merged = Object.assign(getSettings(), {}); for (const k of SG_KEYS) if (q.s[k] !== undefined) merged[k] = q.s[k];
+    applySettings(merged);
+    for (const id of ['mCentre', 'mDrift']) if (isFinite(q[id])) { $(id).value = q[id]; $(id).dispatchEvent(new Event('input')); }
+    if (P.A) changed(true);
+    polChanged(); if (PLUGIN) { updLiveUi(); sendLive(true); }
+    autosaveSoon(); notice('Loaded the settings for <b>' + q.name.replace(/[<>&]/g, '') + '</b>.');
+  }
+  $('sgSave').onclick = async () => {
+    const name = $('sgName').value.trim().slice(0, 40); if (!name) { $('sgName').focus(); return; }
+    const all = getSettings(), s = {}; for (const k of SG_KEYS) if (all[k] !== undefined) s[k] = JSON.parse(JSON.stringify(all[k]));
+    const list = await loadSingers(), q = { name, t: Date.now(), s, mCentre: +$('mCentre').value, mDrift: +$('mDrift').value };
+    const at = list.findIndex(o => o.name.toLowerCase() === name.toLowerCase()); if (at >= 0) list[at] = q; else list.push(q);
+    list.sort((a, b) => a.name.localeCompare(b.name));
+    const ok = await saveSingers(list); $('sgName').value = ''; await updSingers();
+    $('sgHint').textContent = ok ? 'Saved ' + name + '.' : 'Couldn\u2019t save here.';
+  };
+  $('sgName').addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') $('sgSave').click(); });
+
+  // detected key, how sure it is, and the close alternatives as one-click choices
+  function showKeyResult(k, extra) {
+    const nm = (q) => KEYNAMES[q.key] + ' ' + (q.mode === 'major' ? 'major' : 'minor');
+    $('keyHint').textContent = 'Detected key: ' + nm(k) + ' (' + ({ high: 'clear match', medium: 'likely', low: 'not certain: check the alternatives' })[k.confidence || 'medium'] + ')' + (extra ? ' \u00b7 ' + extra : '');
+    const box = $('keyAlt'); box.innerHTML = '';
+    for (const q of (k.ranked || []).slice(0, 4)) {
+      const b = document.createElement('button'); b.textContent = nm(q);
+      const on = q.key === ui.key && (q.mode === 'major') === (ui.scale === 'major'); b.setAttribute('aria-pressed', String(on));
+      b.title = 'Use ' + nm(q) + ' (match ' + Math.round(Math.max(0, q.score) * 100) + '%)';
+      b.onclick = () => { ui.key = q.key; ui.scale = q.mode === 'major' ? 'major' : 'minor'; $('keySel').value = ui.key; $('scaleSel').value = ui.scale; $('keySel').dispatchEvent(new Event('change')); $('scaleSel').dispatchEvent(new Event('change')); showKeyResult(k, extra); };
+      box.appendChild(b);
+    }
+  }
+  $('keyDetect').onclick = () => {
+    if (!P.A || !P.notes.length) return;
+    const ns = ui.sel.size ? selNotes() : P.notes, k = DSP.detectKey(ns);
+    ui.key = k.key; ui.scale = k.mode === 'major' ? 'major' : 'minor'; $('keySel').value = ui.key; $('scaleSel').value = ui.scale;
+    $('keySel').dispatchEvent(new Event('change')); $('scaleSel').dispatchEvent(new Event('change'));
+    showKeyResult(k, 'from ' + ns.length + (ui.sel.size ? ' selected' : '') + ' note' + (ns.length === 1 ? '' : 's') + '.');
   };
   $('correctBtn').onclick = () => {
     if (!P.A) return;
     const amt = +$('mCentre').value / 100, dr = +$('mDrift').value / 100;
     const ns = ui.sel.size ? selNotes() : P.notes;
-    pushUndo();
+    pushUndo('', 'Correct pitch');
     for (const n of ns) {
       if (n.follow) { n.shift = n.shift * (1 - amt); continue; } // slides ride along with the notes either side
       const tgt = nearestScale(n._c0), want = tgt - n._c0;
@@ -6198,6 +6622,7 @@ const DSP = (() => {
     changed(true);
   };
   $('trans').addEventListener('input', () => { ui.transMs = +$('trans').value; $('transO').textContent = ui.transMs + ' ms'; if (P.A) changed(false); });
+  $('splitChk').onchange = () => { ui.engSplit = $('splitChk').checked; DSP.setStudioEngine(ui.engSplit); autosaveSoon(); if (P.A) { P.prev = null; P.out.set(P.x); doRender(); } };
   $('showOrig').onchange = () => { ui.showOrig = $('showOrig').checked; requestDraw(); autosaveSoon(); };
   $('snapScale').onchange = () => { ui.snapScale = $('snapScale').checked; autosaveSoon(); };
   $('keepMove').addEventListener('input', () => { ui.keepMove = +$('keepMove').value / 100; $('keepMoveO').textContent = $('keepMove').value + '%'; if (P.A) changed(false); });
@@ -6205,7 +6630,7 @@ const DSP = (() => {
   $('abEdit').onclick = () => setAB('edit'); $('abOrig').onclick = () => setAB('orig');
   $('playBtn').onclick = () => playing ? stop() : play();
   $('stopBtn').onclick = () => { seek(0); view.t0 = Math.min(view.t0, 0); requestDraw(); };
-  $('undoBtn').onclick = doUndo; $('redoBtn').onclick = doRedo;
+  $('undoBtn').onclick = doUndo; $('redoBtn').onclick = doRedo; $('histBtn').onclick = () => openPanelById('pnl-history');
 
   // ---------- plugin mode: transfer, playback hand-off, state in the GarageBand project
   let lastSent = null, pushTimer = 0, pushing = false, pushAgain = false, plugArmed = false;
@@ -6214,13 +6639,28 @@ const DSP = (() => {
     for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
     return btoa(s);
   }
+  // what GarageBand plays: the tuned vocal, with the mouth-click and plosive repair built in when they're on
+  let plugClean = null;
+  function plugOut() {
+    const o = polOpts(), pl = o.plosive > 0 ? o.plosive : 0, cl = o.clicks > 0 ? o.clicks : 0;
+    if (!pl && !cl) { plugClean = null; return P.out; }
+    const key = outGen + '|' + pl + '|' + cl + '|' + P.out.length;
+    if (plugClean && plugClean.key === key && plugClean.src === P.out) return plugClean.y;
+    let y = P.out;
+    if (pl) { let s2 = 0, c = 0; for (let i = 0; i < y.length; i += 64) { s2 += y[i] * y[i]; c++; } y = DSP.deplosive(y, P.sr, pl, 10 * Math.log10(s2 / Math.max(1, c) + 1e-14) + 6); }
+    let clicks = 0; if (cl) { const r = DSP.declick(y, P.sr, cl); y = r.y; clicks = r.clicks; }
+    if (y === P.out) y = P.out.slice();
+    plugClean = { key, y, clicks, src: P.out };
+    const cs = $('clickStat'); if (cs) cs.textContent = cl ? 'Repaired ' + clicks + ' click' + (clicks === 1 ? '' : 's') + '.' : '';
+    return y;
+  }
   function schedulePush() { if (!PLUGIN || !P.out) return; clearTimeout(pushTimer); pushTimer = setTimeout(pushRendered, 120); }
   // send only the stretches of tuned audio that changed since the last hand-off
   async function pushRendered() {
     if (pushing) { pushAgain = true; return; }
     if (!P.out || !lastSent || lastSent.length !== P.out.length) return;
     pushing = true;
-    const CH = 4096, N = P.out.length, out = P.out;
+    const CH = 4096, N = P.out.length, out = plugOut();
     const same = (a) => { const e = Math.min(N, a + CH); for (let i = a; i < e; i++) if (out[i] !== lastSent[i]) return false; return true; };
     try {
       let i = 0;
@@ -6246,6 +6686,7 @@ const DSP = (() => {
     if (!ok) return false;
     // the plug-in already holds the tuned audio from the saved project (or the plain transfer after a new one)
     lastSent = fromSaved && proj ? P.out.slice() : P.raw.slice();
+    if (!proj && +st.bpm > 20 && +st.bpm < 400) { ui.bpm = +st.bpm; $('bpm').value = +(+st.bpm).toFixed(2); requestDraw(); }   // the grid follows GarageBand's tempo
     schedulePush();
     $('fileName').textContent = 'Transferred from GarageBand \u00b7 ' + fmtTime(w.ch[0].length / w.sr).replace(/\.\d+$/, '') + ' \u00b7 ' + (w.sr / 1000).toFixed(1) + ' kHz';
     if (PLUGIN) { updLiveUi(); sendLive(true); updSections(); }
@@ -6334,6 +6775,7 @@ const DSP = (() => {
   }
 
   // ---------- keyboard
+  let openPanelById = () => { };
   document.addEventListener('keydown', (e) => {
     const tg = e.target; if (tg && (tg.tagName === 'INPUT' || tg.tagName === 'SELECT' || tg.tagName === 'TEXTAREA')) return;
     const mod = e.ctrlKey || e.metaKey;
@@ -6344,7 +6786,7 @@ const DSP = (() => {
     if (mod && e.key.toLowerCase() === 'a') { e.preventDefault(); ui.sel = new Set(P.notes.map((_, i) => i)); updInspector(); requestDraw(); return; }
     if (mod) return;
     if (e.key === 'Escape') { ui.sel.clear(); updInspector(); requestDraw(); }
-    else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { if (!ui.sel.size) return; e.preventDefault(); const s = (e.key === 'ArrowUp' ? 1 : -1) * (e.altKey ? 5 : 100); applySel(e.altKey ? 'nudge' : '', n => n.shift += s); scheduleRender(); }
+    else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { if (!ui.sel.size) return; e.preventDefault(); const s = (e.key === 'ArrowUp' ? 1 : -1) * (e.altKey ? 5 : 100); applySel(e.altKey ? 'nudge' : 'semi', n => n.shift += s); scheduleRender(); }
     else if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && e.altKey) { e.preventDefault(); nudgeTime((e.key === 'ArrowRight' ? 1 : -1) * (e.shiftKey ? 10 : 2)); scheduleRender(); }
     else if (e.key === '1' || e.key.toLowerCase() === 'p') setTool('pitch');
     else if (e.key === '2' || e.key.toLowerCase() === 't') setTool('time');
@@ -6364,6 +6806,16 @@ const DSP = (() => {
     else if (e.key.toLowerCase() === 'r') startRec();
     else if (e.key.toLowerCase() === 'q') { if (REF.buf) toggleRef(); }
     else if (e.key === 'Home') $('stopBtn').click();
+    else if (e.key === 'End') { if (P.x) seek(P.x.length / P.sr); }
+    else if (e.key.toLowerCase() === 'c') { if (P.A) $('correctBtn').click(); }
+    else if (e.key === '0') $('fitBtn').click();
+    else if (e.key === '=' || e.key === '+') $('zoomIn').click();
+    else if (e.key === '-' || e.key === '_') $('zoomOut').click();
+    else if (e.key === ',' || e.key === '.') { if (P.x) seek(curPos() + (e.key === '.' ? 1 : -1) * (e.shiftKey ? 5 : 1)); }
+    else if (e.key === 'Enter') { if (ui.sel.size && P.A) { const k = Math.min(...ui.sel), n = P.notes[k]; if (playing) stop(); seek(Math.max(0, n.os / frPerSec() - 0.25)); play(); } }
+    else if (e.key.toLowerCase() === 'y') openPanelById('pnl-history');
+    else if (e.key.toLowerCase() === 'l') openPanelById('pnl-lyrics');
+    else if (e.key === '?') openPanelById('pnl-keys');
   });
 
 
@@ -6471,7 +6923,7 @@ const DSP = (() => {
   }
   $('stackDblIn').addEventListener('change', (e) => { const f = e.target.files[0]; e.target.value = ''; if (f && P.A) addStack(f, 'double'); });
   $('stackAdlIn').addEventListener('change', (e) => { const f = e.target.files[0]; e.target.value = ''; if (f && P.A) addStack(f, 'adlib'); });
-  for (const id of ['stackDblLbl', 'stackAdlLbl', 'myImportLbl', 'refLbl']) $(id).addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $(id).click(); } });
+  for (const id of ['stackDblLbl', 'stackAdlLbl', 'myImportLbl', 'refLbl', 'alFileLbl']) $(id).addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $(id).click(); } });
 
   // ---- parametric EQ: drag the points on the curve
   const PEQ_LABEL = ['Low cut', 'Low shelf', 'Bell 1', 'Bell 2', 'Bell 3', 'High shelf'];
@@ -6840,10 +7292,11 @@ const DSP = (() => {
     // panels: float above the editor, can be dragged by their title, several can be open at once
     let zTop = 50, stagger = 0;
     function front(pn) { for (const q of document.querySelectorAll('.panel')) q.style.zIndex = q === pn ? String(++zTop) : q.style.zIndex; }
+    openPanelById = (id) => openPanel(id, null);
     function openPanel(id, anchor) {
       const pn = $(id); if (!pn) return;
       if (!pn.hidden) { front(pn); return; }
-      pn.hidden = false; front(pn);
+      pn.hidden = false; front(pn); if (id === 'pnl-history') updHistory(); if (id === 'pnl-singers') updSingers(); if (id === 'pnl-align') updAlignPeers();
       const w = pn.offsetWidth, h = pn.offsetHeight, vw = innerWidth, vh = innerHeight;
       if (matchMedia('(max-width:820px)').matches) for (const q of document.querySelectorAll('.panel')) if (q !== pn) q.hidden = true;
       const st = $('stage').getBoundingClientRect();
@@ -6899,5 +7352,3 @@ const DSP = (() => {
   else resumeSession().then(ok => { if (!ok) { const sr0 = 44100; load(DSP.synthDemo(sr0), sr0, 'Demo phrase (synthesised voice)'); } });
 })();
 </script>
-
-</body></html>

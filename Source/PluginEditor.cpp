@@ -1,5 +1,6 @@
 #include "PluginEditor.h"
 #include "BinaryData.h"
+#include "NativeAI.h"
 
 #if JUCE_MAC
 void sudzCloseHostWindow (void* viewHandle);   // MacHelpers.mm
@@ -13,6 +14,25 @@ namespace
         std::memcpy (v.data(), data, size);
         return v;
     }
+}
+
+juce::File SudzEditor::splitModelFile()
+{
+    return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory).getChildFile ("Sudz").getChildFile ("models").getChildFile ("htdemucs_ft_vocals.onnx");
+}
+
+// AI work runs on the engine's own thread; the answer goes back to the page on the message thread, if the window is still open
+void SudzEditor::runAiJob (juce::WebBrowserComponent::NativeFunctionCompletion complete, std::function<juce::var()> job)
+{
+    juce::Component::SafePointer<SudzEditor> safe (this);
+    sudzai::Engine::get().pool().addJob ([safe, complete, job]
+    {
+        juce::var r;
+        try { r = job(); }
+        catch (const std::exception& e) { auto* o = new juce::DynamicObject(); o->setProperty ("error", juce::String (e.what())); r = juce::var (o); }
+        catch (...) { auto* o = new juce::DynamicObject(); o->setProperty ("error", "the AI engine failed"); r = juce::var (o); }
+        juce::MessageManager::callAsync ([safe, complete, r] { if (safe != nullptr) complete (r); });
+    });
 }
 
 juce::WebBrowserComponent::Options SudzEditor::makeOptions()
@@ -86,6 +106,142 @@ juce::WebBrowserComponent::Options SudzEditor::makeOptions()
             out.write (decoded.getData(), decoded.getDataSize());
             out.flush();
             complete (file.getFullPathName());
+        })
+        // small settings files shared by the plug-in and the Sudz app (singer presets): ~/Library/Application Support/Sudz/<name>.json
+        .withNativeFunction ("pwLoadPrefs", [] (const juce::Array<juce::var>& args, auto complete)
+        {
+            const auto name = juce::File::createLegalFileName (args.size() > 0 ? args[0].toString() : juce::String ("prefs")).substring (0, 60);
+            const auto f = juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory).getChildFile ("Sudz").getChildFile (name + ".json");
+            complete (f.existsAsFile() ? juce::var (f.loadFileAsString()) : juce::var());
+        })
+        .withNativeFunction ("pwSavePrefs", [] (const juce::Array<juce::var>& args, auto complete)
+        {
+            if (args.size() < 2) { complete (false); return; }
+            const auto name = juce::File::createLegalFileName (args[0].toString()).substring (0, 60);
+            const auto dir = juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory).getChildFile ("Sudz");
+            dir.createDirectory();
+            complete (dir.getChildFile (name + ".json").replaceWithText (args[1].toString().substring (0, 4000000)));
+        })
+        // other tracks with Sudz on them (to line a double or harmony up with the lead)
+        .withNativeFunction ("pwListPeers", [this] (const juce::Array<juce::var>&, auto complete)
+        {
+            juce::Array<juce::var> list;
+            for (const auto& q : SudzProcessor::listPeers (&proc))
+            {
+                auto* o = new juce::DynamicObject();
+                o->setProperty ("id", q.id); o->setProperty ("name", q.name); o->setProperty ("start", (double) q.start);
+                o->setProperty ("length", (double) q.length); o->setProperty ("rate", q.rate);
+                list.add (juce::var (o));
+            }
+            auto* me = new juce::DynamicObject(); me->setProperty ("peers", list); me->setProperty ("name", proc.getTrackName()); me->setProperty ("id", proc.getInstanceId());
+            complete (juce::var (me));
+        })
+        // ---- native AI (ONNX Runtime on this Mac's processor); the page falls back to its own engine without it
+        .withNativeFunction ("pwAiInfo", [] (const juce::Array<juce::var>&, auto complete)
+        {
+            auto& ai = sudzai::Engine::get();
+            auto* o = new juce::DynamicObject();
+            o->setProperty ("available", ai.available()); o->setProperty ("status", ai.status()); o->setProperty ("version", ai.version());
+            o->setProperty ("threads", ai.threads());
+            const auto split = splitModelFile();
+            o->setProperty ("split", split.existsAsFile()); o->setProperty ("splitMB", (double) split.getSize() / 1e6);
+            complete (juce::var (o));
+        })
+        .withNativeFunction ("pwAiLoad", [this] (const juce::Array<juce::var>& args, auto complete)
+        {
+            const auto which = args.size() > 0 ? args[0].toString() : juce::String ("dfn");
+            runAiJob (complete, [which]() -> juce::var
+            {
+                auto& ai = sudzai::Engine::get();
+                auto* o = new juce::DynamicObject(); juce::var res (o);
+                juce::String err; bool ok = ai.available();
+                if (! ok) err = ai.status();
+                else if (which == "dfn")
+                {
+                    for (auto n : { "enc", "erb_dec", "df_dec" })
+                    {
+                        if (ai.has (n)) continue;
+                        int size = 0; const char* data = nullptr;
+                        const auto want = juce::String (n) + ".onnx.b64.txt";
+                        for (int i = 0; i < BinaryData::namedResourceListSize && data == nullptr; ++i)
+                            if (want == BinaryData::originalFilenames[i]) data = BinaryData::getNamedResource (BinaryData::namedResourceList[i], size);
+                        juce::MemoryOutputStream model;
+                        if (data == nullptr || ! juce::Base64::convertFromBase64 (model, juce::String::fromUTF8 (data, size).trim())) { ok = false; err = "the clean-up network is missing from Sudz"; break; }
+                        if (! ai.loadMemory (n, model.getData(), model.getDataSize(), false, err)) { ok = false; break; }
+                    }
+                }
+                else if (which == "split")
+                {
+                    const auto f = splitModelFile();
+                    if (! f.existsAsFile()) { ok = false; err = "the separation model isn't installed"; }
+                    else if (! ai.has ("split")) ok = ai.loadFile ("split", f, false, err);
+                }
+                else { ok = false; err = "unknown network"; }
+                o->setProperty ("ok", ok); if (! ok) o->setProperty ("error", err);
+                return res;
+            });
+        })
+        .withNativeFunction ("pwAiRun", [this] (const juce::Array<juce::var>& args, auto complete)
+        {
+            // args: chain ("enc,erb_dec,df_dec"), JSON { inputs: { name: { dims, b64 } }, want: [names], pick: { name: [offset, count] } }
+            const auto chainCsv = args.size() > 0 ? args[0].toString() : juce::String(), payload = args.size() > 1 ? args[1].toString() : juce::String();
+            runAiJob (complete, [chainCsv, payload]() -> juce::var
+            {
+                auto* o = new juce::DynamicObject(); juce::var res (o);
+                const auto t0 = juce::Time::getMillisecondCounterHiRes();
+                const auto js = juce::JSON::parse (payload);
+                sudzai::TensorMap in, out;
+                if (auto* ins = js["inputs"].getDynamicObject())
+                    for (const auto& kv : ins->getProperties())
+                    {
+                        auto& t = in[kv.name.toString().toStdString()];
+                        if (auto* d = kv.value["dims"].getArray()) for (const auto& v : *d) t.dims.push_back ((int64_t) (double) v);
+                        juce::MemoryOutputStream raw;
+                        juce::Base64::convertFromBase64 (raw, kv.value["b64"].toString());
+                        t.data.resize (raw.getDataSize() / sizeof (float));
+                        std::memcpy (t.data.data(), raw.getData(), t.data.size() * sizeof (float));
+                    }
+                std::vector<std::string> chain, want;
+                for (const auto& s : juce::StringArray::fromTokens (chainCsv, ",", "")) chain.push_back (s.trim().toStdString());
+                if (auto* w = js["want"].getArray()) for (const auto& v : *w) want.push_back (v.toString().toStdString());
+                juce::String err;
+                if (! sudzai::Engine::get().runChain (chain, in, want, out, err)) { o->setProperty ("error", err); return res; }
+                auto* outs = new juce::DynamicObject();
+                for (const auto& kv : out)
+                {
+                    const auto& t = kv.second;
+                    size_t a = 0, n = t.data.size();
+                    if (auto pk = js["pick"][juce::Identifier (juce::String (kv.first))]; pk.isArray() && pk.size() == 2)
+                    { a = (size_t) juce::jlimit (0.0, (double) n, (double) pk[0]); n = (size_t) juce::jlimit (0.0, (double) (t.data.size() - a), (double) pk[1]); }
+                    auto* to = new juce::DynamicObject();
+                    juce::Array<juce::var> dims; for (auto d : t.dims) dims.add ((double) d);
+                    to->setProperty ("dims", dims);
+                    to->setProperty ("b64", juce::Base64::toBase64 (t.data.data() + a, n * sizeof (float)));
+                    outs->setProperty (juce::Identifier (juce::String (kv.first)), juce::var (to));
+                }
+                o->setProperty ("outputs", juce::var (outs));
+                o->setProperty ("ms", juce::Time::getMillisecondCounterHiRes() - t0);
+                return res;
+            });
+        })
+        .withNativeFunction ("pwAiInstallSplit", [this] (const juce::Array<juce::var>&, auto complete)
+        {
+            // the 166 MB separation model, copied once into ~/Library/Application Support/Sudz/models
+            chooser = std::make_unique<juce::FileChooser> ("Choose the separation model (htdemucs_ft_vocals_fp16weights.onnx)",
+                                                           juce::File::getSpecialLocation (juce::File::userHomeDirectory).getChildFile ("Downloads"), "*.onnx");
+            chooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
+                                  [complete] (const juce::FileChooser& fc)
+                                  {
+                                      const auto f = fc.getResult();
+                                      auto* o = new juce::DynamicObject(); juce::var res (o);
+                                      if (! f.existsAsFile()) { complete (juce::var()); return; }
+                                      if (f.getSize() < 100000000) { o->setProperty ("error", "That doesn't look like the separation model (it should be about 166 MB)."); complete (res); return; }
+                                      const auto dst = splitModelFile();
+                                      dst.getParentDirectory().createDirectory();
+                                      if (! f.copyFileTo (dst)) { o->setProperty ("error", "The model couldn't be copied into Sudz's folder."); complete (res); return; }
+                                      o->setProperty ("ok", true); o->setProperty ("mb", (double) dst.getSize() / 1e6);
+                                      complete (res);
+                                  });
         })
         .withNativeFunction ("pwReveal", [this] (const juce::Array<juce::var>& args, auto complete)
         {
@@ -218,6 +374,7 @@ juce::var SudzEditor::stateObject() const
     o->setProperty ("armed", proc.isArmed());
     o->setProperty ("timeline", proc.hostReportsTimeline());
     o->setProperty ("start", (double) proc.getTransferStart());     // where the transfer begins on GarageBand's timeline (samples)
+    o->setProperty ("bpm", proc.getHostBpm());                       // GarageBand's tempo (0 if not reported yet)
     juce::Array<juce::var> secs;
     for (const auto& sct : proc.getSections())
     {
@@ -250,6 +407,12 @@ std::optional<juce::WebBrowserComponent::Resource> SudzEditor::getResource (cons
                 return juce::WebBrowserComponent::Resource { toBytes (data, (size_t) size), mime };
             }
         return std::nullopt;
+    }
+    if (path.startsWith ("/peer/"))
+    {
+        const auto wav = SudzProcessor::peerAudioAsWav (path.fromLastOccurrenceOf ("/", false, false).upToFirstOccurrenceOf (".", false, false).getIntValue());
+        if (wav.getSize() == 0) return std::nullopt;
+        return juce::WebBrowserComponent::Resource { toBytes (wav.getData(), wav.getSize()), "audio/wav" };
     }
     if (path == "/transfer.wav")
     {

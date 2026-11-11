@@ -34,6 +34,19 @@ COMPONENT="$HOME/Library/Audio/Plug-Ins/Components/Sudz.component"
 rm -rf "$COMPONENT"
 cp -R "build/Sudz_artefacts/Release/AU/Sudz.component" "$COMPONENT"
 
+# The native AI engine (ONNX Runtime 1.19.2, the newest that runs on macOS 11), shared by the plug-in and the app
+LIB="$HOME/Library/Application Support/Sudz/lib"
+if [ ! -f "$LIB/libonnxruntime.dylib" ]; then
+  echo "Getting the AI engine (ONNX Runtime)…"
+  T="$(mktemp -d)"
+  if curl -fsSL -o "$T/ort.tgz" https://github.com/microsoft/onnxruntime/releases/download/v1.19.2/onnxruntime-osx-universal2-1.19.2.tgz && tar xzf "$T/ort.tgz" -C "$T"; then
+    mkdir -p "$LIB"; cp "$T"/onnxruntime-osx-universal2-1.19.2/lib/libonnxruntime.1.19.2.dylib "$LIB/libonnxruntime.dylib"
+    lipo "$LIB/libonnxruntime.dylib" -thin "$ARCH" -output "$LIB/libonnxruntime.thin" 2>/dev/null && mv "$LIB/libonnxruntime.thin" "$LIB/libonnxruntime.dylib"
+    codesign --force --sign - "$LIB/libonnxruntime.dylib" 2>/dev/null || true
+  else echo "Couldn't download the AI engine; Sudz will use its slower built-in one."; fi
+  rm -rf "$T"
+fi
+
 # Make macOS rescan Audio Units, then validate (GarageBand only shows plug-ins that pass).
 killall -9 AudioComponentRegistrar >/dev/null 2>&1 || true
 auval -v aufx Sudz Sdzv
