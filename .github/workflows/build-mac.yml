@@ -1,0 +1,55 @@
+name: Build Sudz for macOS
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure (universal for Apple silicon and Intel, macOS 11 and later)
+        run: cmake -B build -G Xcode -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
+
+      - name: Build the Audio Unit and the app
+        run: cmake --build build --config Release --target Sudz_AU Sudz_Standalone -- -quiet
+
+      - name: Sign for local use and package
+        run: |
+          mkdir -p pkg/Sudz
+          cp -R build/Sudz_artefacts/Release/AU/Sudz.component pkg/Sudz/
+          cp -R build/Sudz_artefacts/Release/Standalone/Sudz.app pkg/Sudz/
+          codesign --force --deep --sign - pkg/Sudz/Sudz.component
+          codesign --force --deep --sign - pkg/Sudz/Sudz.app
+          cp install.command pkg/Sudz/ && chmod +x pkg/Sudz/install.command
+          cp INSTALL.txt pkg/Sudz/
+          (cd pkg && ditto -c -k --keepParent Sudz ../Sudz-mac.zip)
+          lipo -info pkg/Sudz/Sudz.component/Contents/MacOS/Sudz
+
+      - name: Check it passes Apple's Audio Unit validation
+        run: |
+          mkdir -p ~/Library/Audio/Plug-Ins/Components
+          rm -rf ~/Library/Audio/Plug-Ins/Components/Sudz.component
+          cp -R pkg/Sudz/Sudz.component ~/Library/Audio/Plug-Ins/Components/
+          killall -9 AudioComponentRegistrar || true
+          auval -v aufx Sudz Sdzv
+
+      - name: Keep the build
+        uses: actions/upload-artifact@v4
+        with:
+          name: Sudz-mac
+          path: Sudz-mac.zip
+
+      - name: Publish as the "latest" release (downloadable without signing in)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VER=$(grep -Eo 'VERSION [0-9.]+' CMakeLists.txt | head -1 | cut -d' ' -f2)
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest Sudz-mac.zip --title "Sudz $VER for Mac" --notes "Sudz $VER: GarageBand plug-in (Audio Unit) and the Sudz app, for macOS 11 or later, Apple silicon and Intel. Unzip, then run install.command (see INSTALL.txt)."
