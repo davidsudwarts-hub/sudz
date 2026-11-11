@@ -1,0 +1,10 @@
+Installing Sudz (GarageBand plug-in and app)
+
+1. Unzip Sudz-mac.zip (double-click it). You get a folder called Sudz.
+2. Open Terminal and run (drag install.command into the Terminal window instead of typing the path, if you like):
+
+   bash ~/Downloads/Sudz/install.command
+
+3. Quit and reopen GarageBand. In your vocal track's plug-ins, remove Sudz and add it again (Audio Units > Sudz).
+
+The plug-in is signed for local use only, which is why it's installed with the command above rather than by double-clicking.

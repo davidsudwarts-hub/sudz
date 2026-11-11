@@ -1,0 +1,5 @@
+build/
+dist/
+pkg/
+*.zip
+.DS_Store
