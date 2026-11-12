@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(SUDZ VERSION 0.16.0)
+project(SUDZ VERSION 0.16.1)
 
 # JUCE: use a local checkout if you pass -DJUCE_DIR=/path/to/JUCE, otherwise download JUCE 8.0.4.
 if(DEFINED JUCE_DIR)
