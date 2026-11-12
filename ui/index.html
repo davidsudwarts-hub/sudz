@@ -818,7 +818,7 @@ details.fine[open] summary{margin-bottom:6px}
         <div class="ctl"><label for="trans">Note transitions</label><output id="transO">50 ms</output>
         <input type="range" id="trans" min="10" max="100" step="5" value="50"></div>
         <label class="check"><input type="checkbox" id="protectChk" checked> Keep natural scoops and fall-offs</label>
-        <p class="hint">Quick slides into the start of a note and falls off the end of it stay as you sang them, even when you flatten a note or draw a Note or Line over it. Untick only if you want them corrected too.</p>
+        <p class="hint">Quick slides into the start of a note and falls off the end of it stay as you sang them when you flatten or correct a note. Untick only if you want them corrected too. Anything you draw over with the Draw tool always follows your line.</p>
         <label class="check web-only"><input type="checkbox" id="auditionChk" checked> Hear a note while you hold the mouse on it</label>
         <label class="check"><input type="checkbox" id="showOrig" checked> Show original pitch curve</label>
         <label class="check"><input type="checkbox" id="snapScale"> Drag snaps to scale notes</label>
@@ -6025,15 +6025,8 @@ const DSP = (() => {
   function finishStroke(d) {
     for (const k of d.touched) {
       const n = P.notes[k]; if (!n || !n.pd) continue;
-      if ((d.mode === 'note' || d.mode === 'line') && ui.protectEdges !== false) {
-        // natural scoops and fall-offs keep their shape but move with the drawn note (they used to be left at the
-        // original pitch, which pulled short notes back to where they were sung)
-        for (let q = 0; q < n.pd.length; q++) {
-          if (n.pd[q] == null) continue;
-          const ek = DSP.edgeKeep(n, q), i = n.s + q;
-          if (ek > 0 && P.A.voiced[i]) n.pd[q] += ek * (P.A.cents[i] - n._c0);
-        }
-      }
+      // whatever you draw over is what you get: scoops, slides and phrase-end fall-offs included (the
+      // "keep natural scoops" setting protects them from Flatten and Correct, not from a line you drew)
       if (d.mode === 'note') {
         // Note: where the line steps to a new note, glide over ~50 ms instead of jumping
         const v = n.pd, src = v.slice(), R = 5;
