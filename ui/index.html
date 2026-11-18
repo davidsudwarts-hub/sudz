@@ -761,6 +761,7 @@ details.fine[open] summary{margin-bottom:6px}
         <button id="vcGo" class="primary" disabled>Convert this take to my voice</button>
         <progress id="vcProg" max="1" value="0" hidden style="width:100%"></progress>
         <p class="hint" id="vcHint"></p>
+        <p class="hint" id="vcEngine" hidden></p>
         <p class="hint">Works best when the take is a single dry voice. Convert first, then tune and polish the result as usual. Only use voices you have permission to use.</p>
       </div>
     </section>
@@ -6645,12 +6646,19 @@ const DSP = (() => {
       try { const l = await store.get('vcVoices'); VCS.voices = Array.isArray(l) ? l : []; } catch (e) { VCS.voices = []; }
       try { const c = await store.get('vcContentInfo'); VCS.content = !!(c && c.mb); } catch (e) { VCS.content = false; }
     }
-    for (const id of ['vcVoiceIn', 'vcContentIn']) $(id).dataset.native = nat ? '1' : '';
+    for (const id of ['vcVoiceIn', 'vcContentIn']) $(id).dataset.native = NATIVE ? '1' : '';   // on the Mac, models always go through Sudz's own folder
     const sel = $('vcVoice'), keep = sel.value || (ui.vcVoice || ''); sel.innerHTML = '';
     if (!VCS.voices.length) sel.add(new Option('No voice yet', ''));
     for (const v of VCS.voices) sel.add(new Option(v.name, v.key));
     if ([...sel.options].some(o => o.value === keep)) sel.value = keep;
     $('vcContent').textContent = VCS.content ? 'Installed.' : 'Not installed yet (one file, about 380 MB, made by the training notebook).';
+    // on the Mac, say plainly whether the AI engine is running (voices need it there) and why not
+    if (NATIVE) {
+      const inf = NAI.info;
+      $('vcEngine').textContent = nat ? 'AI engine: running on your Mac (' + (inf && inf.version ? 'ONNX Runtime ' + inf.version : 'native') + ').'
+        : 'AI engine: not running' + (inf && inf.status ? ' (' + inf.status + ')' : '') + '. Run install.command again; if this stays, send this message to Claude.';
+      $('vcEngine').hidden = false;
+    }
     $('vcContentLbl').textContent = VCS.content ? 'Replace\u2026' : 'Choose sudz_content.onnx\u2026';
     $('vcRemove').disabled = !sel.value;
     const v = VCS.voices.find(q => q.key === sel.value), take = P.A ? DSP.vcMedianHz(P.A) : 0;
@@ -6667,6 +6675,7 @@ const DSP = (() => {
     $('vcSemi').value = st; $('vcSemi').dispatchEvent(new Event('input'));
   };
   const vcInstall = async (kind) => {
+    if (!(await vcNative())) { notice('Voices need the AI engine on your Mac, and it isn\u2019t running: ' + ((NAI.info && NAI.info.status) || 'unknown reason') + '. Run install.command again, and if it still says this, send the message to Claude.'); updVoiceUi(); return; }
     const r = await nativeCall('pwAiInstallVoice', kind); if (!r) return;
     if (r.error) notice(r.error); else { notice(kind === 'content' ? 'The feature model is installed in Sudz.' : 'Voice installed. Pick it under 1. Your voice.'); if (r.file && kind !== 'content') ui.vcVoice = r.file; }
     updVoiceUi();
@@ -6675,6 +6684,7 @@ const DSP = (() => {
   $('vcContentLbl').addEventListener('click', (e) => { if ($('vcContentIn').dataset.native !== '1') return; e.preventDefault(); e.stopPropagation(); vcInstall('content'); });
   $('vcVoiceIn').addEventListener('change', async (e) => {
     const fs = [...e.target.files]; e.target.value = ''; const onnx = fs.find(f => /\.onnx$/i.test(f.name)); if (!onnx) return;
+    if (NATIVE) { notice('Voices need the AI engine on your Mac, and it isn\u2019t running: ' + ((NAI.info && NAI.info.status) || 'unknown reason') + '. Run install.command again.'); return; }
     if (onnx.size < 2e7) { notice('That doesn\u2019t look like a Sudz voice model (about 110 MB).'); return; }
     let meta = {}; const js = fs.find(f => /\.json$/i.test(f.name)); if (js) { try { meta = JSON.parse(await js.text()); } catch (err) { } }
     const key = onnx.name, name = meta.name || onnx.name.replace(/\.onnx$/i, '');
@@ -6687,6 +6697,7 @@ const DSP = (() => {
   });
   $('vcContentIn').addEventListener('change', async (e) => {
     const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+    if (NATIVE) { notice('The feature model needs the AI engine on your Mac, and it isn\u2019t running: ' + ((NAI.info && NAI.info.status) || 'unknown reason') + '. Run install.command again.'); return; }
     if (f.size < 2e8) { notice('That doesn\u2019t look like the feature model (about 380 MB).'); return; }
     try { await store.put('vcContent', { bytes: new Blob([f]) }); await store.put('vcContentInfo', { mb: f.size / 1e6 }); VCS.web.content = null; }
     catch (err) { notice('This browser couldn\u2019t keep the feature model (' + (err.message || err) + ').'); }
