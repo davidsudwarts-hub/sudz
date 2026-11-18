@@ -256,6 +256,7 @@ details.fine[open] summary{margin-bottom:6px}
       <div class="mlist" role="menu" hidden>
         <button role="menuitem" data-panel="pnl-correct"><span>Key and correction&#x2026;</span><span class="mi-v" data-for="pnl-correct"></span></button>
         <button role="menuitem" data-panel="pnl-midi"><span>MIDI and guide&#x2026;</span><span class="mi-v" data-for="pnl-midi"></span></button>
+        <button role="menuitem" data-panel="pnl-voice"><span>Sing it in my voice&#x2026;</span></button>
         <button role="menuitem" data-panel="pnl-singers"><span>My singers&#x2026;</span></button>
         <button role="menuitem" data-panel="pnl-engine"><span>Engine settings&#x2026;</span><span class="mi-v" data-for="pnl-engine"></span></button>
       </div>
@@ -747,6 +748,20 @@ details.fine[open] summary{margin-bottom:6px}
         <label class="check"><input type="checkbox" id="alPitch"><span>Also match the lead&#x2019;s pitch (doubles singing the same notes)</span></label>
         <button id="alGo" class="primary" disabled>Line up</button>
         <p class="hint" id="alHint"></p>
+      </div>
+    </section>
+    <section class="panel wide" id="pnl-voice" role="dialog" aria-label="Sing it in my voice" hidden>
+      <div class="phead"><b>Sing it in my voice</b><button class="pclose" aria-label="Close Sing it in my voice">&#xd7;</button></div>
+      <div class="pbody">
+        <p class="hint">Re-sings the take that&#x2019;s open (a guide vocal, a demo, an AI vocal) in your own voice, keeping its melody, words and timing. You need a voice model trained on your singing: see <a href="https://github.com/davidsudwarts-hub/sudz/blob/main/voice/TRAIN-YOUR-VOICE.md" target="_blank" rel="noopener">Train your voice</a> (about an hour in Google Colab, once).</p>
+        <div class="row"><b style="align-self:center">1. Your voice</b><select id="vcVoice" aria-label="Voice model"></select><label class="btn" for="vcVoiceIn" tabindex="0" id="vcVoiceLbl">Add a voice model&#x2026;</label><input type="file" id="vcVoiceIn" accept=".onnx,.json" multiple hidden><button id="vcRemove">Remove</button></div>
+        <div class="row"><b style="align-self:center">2. Feature model</b><span class="hint" id="vcContent" style="align-self:center"></span><label class="btn" for="vcContentIn" tabindex="0" id="vcContentLbl">Choose sudz_content.onnx&#x2026;</label><input type="file" id="vcContentIn" accept=".onnx" hidden></div>
+        <div class="ctl"><label for="vcSemi">Move the melody</label><output id="vcSemiO">0 st</output><input type="range" id="vcSemi" min="-24" max="24" step="1" value="0"></div>
+        <div class="row"><button id="vcAuto" title="Move the take up or down by whole octaves so it sits where you sing (keeps the key)">Match my range</button><span class="hint" id="vcRange" style="align-self:center"></span></div>
+        <button id="vcGo" class="primary" disabled>Convert this take to my voice</button>
+        <progress id="vcProg" max="1" value="0" hidden style="width:100%"></progress>
+        <p class="hint" id="vcHint"></p>
+        <p class="hint">Works best when the take is a single dry voice. Convert first, then tune and polish the result as usual. Only use voices you have permission to use.</p>
       </div>
     </section>
     <section class="panel" id="pnl-singers" role="dialog" aria-label="My singers" hidden>
@@ -2778,6 +2793,83 @@ const DSP = (() => {
   }
 
 
+  // ================= Voice conversion (RVC v2, trained with Applio): any vocal re-sung in a trained voice =================
+  // The network runs outside (run(name, feeds), as with the clean-up): 'content' turns 16 kHz audio into ContentVec
+  // features (one per 20 ms), 'voice' turns features + pitch into audio in the trained voice. Sudz supplies the pitch
+  // from its own tracker. Same steps as Applio's inference: 1 s reflected padding, about 30 s segments cut at the
+  // quietest moment, features doubled to 10 ms, pitch as 255 mel steps plus Hz.
+  const VC = { SR: 16000, WIN: 160, F0MIN: 50, F0MAX: 1100 };
+  function vcReflect(x, p) {
+    const n = x.length, y = new Float32Array(n + 2 * p);
+    for (let i = 0; i < y.length; i++) { let j = i - p; if (j < 0) j = -j; if (j >= n) j = 2 * n - 2 - j; y[i] = x[Math.max(0, Math.min(n - 1, j))]; }
+    return y;
+  }
+  function vcCoarse(f0) {
+    const mn = 1127 * Math.log(1 + VC.F0MIN / 700), mx = 1127 * Math.log(1 + VC.F0MAX / 700), c = new BigInt64Array(f0.length);
+    for (let i = 0; i < f0.length; i++) {
+      let m = 1127 * Math.log(1 + f0[i] / 700);
+      if (m > 0) m = (m - mn) * 254 / (mx - mn) + 1;
+      c[i] = BigInt(Math.round(Math.max(1, Math.min(255, m))));
+    }
+    return c;
+  }
+  // pitch in Hz every 10 ms, from Sudz's analysis (0 where unvoiced), moved by `semi` semitones
+  function vcPitch(A, sr, n16, semi) {
+    const nf = Math.floor(n16 / VC.WIN), f0 = new Float32Array(nf), k = Math.pow(2, (semi || 0) / 12);
+    for (let j = 0; j < nf; j++) {
+      const t = (j * VC.WIN + VC.WIN / 2) / VC.SR, i = Math.round(t * sr / A.hop);
+      if (i >= 0 && i < A.nf && A.voiced[i] && isFinite(A.cents[i])) f0[j] = Math.min(VC.F0MAX, 440 * Math.pow(2, (A.cents[i] - 6900) / 1200) * k);
+    }
+    return f0;
+  }
+  // typical pitch of a take (Hz, median of the sung frames)
+  function vcMedianHz(A) {
+    const v = []; for (let i = 0; i < A.nf; i++) if (A.voiced[i] && isFinite(A.cents[i])) v.push(A.cents[i]);
+    if (!v.length) return 0; v.sort((a, b) => a - b); return 440 * Math.pow(2, (v[v.length >> 1] - 6900) / 1200);
+  }
+  async function voiceConvert(x, sr, A, run, opts = {}, onProgress) {
+    const SR = VC.SR, WIN = VC.WIN, PAD = SR, tgt = opts.tgtSr || 40000, padT = tgt;
+    let a = resample(x, sr, SR);
+    { let pk = 0; for (let i = 0; i < a.length; i++) pk = Math.max(pk, Math.abs(a[i])); if (pk > 0.95) { const g = 0.95 / pk; a = a.map(v => v * g); } }
+    a = zp(zp(a, 'hp', 48, SR, 0.7071), 'hp', 48, SR, 0.7071);
+    const f0 = vcPitch(A, sr, a.length, opts.transpose), ap = vcReflect(a, PAD), f0p = vcReflect(f0, PAD / WIN);
+    // cut points: the quietest 10 ms within 5 s of every 30 s
+    const cuts = [];
+    if (ap.length > 32 * SR) {
+      const e = new Float64Array(a.length + 1); for (let i = 0; i < a.length; i++) e[i + 1] = e[i] + Math.abs(a[i]);
+      for (let t = 30 * SR; t < a.length; t += 30 * SR) {
+        let best = t, bv = Infinity;
+        for (let q = Math.max(WIN, t - 5 * SR); q < Math.min(a.length - WIN, t + 5 * SR); q += 16) { const v = e[q + WIN] - e[q]; if (v < bv) { bv = v; best = q; } }
+        cuts.push(Math.floor(best / WIN) * WIN);
+      }
+    }
+    let seed = 12345;
+    const gauss = () => { seed = (seed * 1664525 + 1013904223) >>> 0; const u = (seed + 1) / 4294967297; seed = (seed * 1664525 + 1013904223) >>> 0; const v = (seed + 1) / 4294967297; return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
+    const convert = async (seg, f0s) => {
+      const fe = await run('content', { audio: [seg, [1, seg.length]] }), F = fe.features[0], Tc = fe.features[1][1], D = fe.features[1][2];
+      const pLen = Math.min(Math.floor(seg.length / WIN), 2 * Tc), ph = new Float32Array(pLen * D);
+      for (let t = 0; t < pLen; t++) ph.set(F.subarray((t >> 1) * D, ((t >> 1) + 1) * D), t * D);     // features doubled to 10 ms
+      const pf = new Float32Array(pLen); pf.set(f0s.subarray(0, Math.min(pLen, f0s.length)));
+      const rnd = new Float32Array(192 * pLen); for (let i = 0; i < rnd.length; i++) rnd[i] = gauss();
+      const o = await run('voice', { phone: [ph, [1, pLen, D]], phone_lengths: [BigInt64Array.from([BigInt(pLen)]), [1], 'int64'], pitch: [vcCoarse(pf), [1, pLen], 'int64'],
+        pitchf: [pf, [1, pLen]], sid: [BigInt64Array.from([BigInt(opts.sid || 0)]), [1], 'int64'], rnd: [rnd, [1, 192, pLen]] });
+      const y = o.audio[0]; return y.subarray(Math.min(padT, y.length), Math.max(Math.min(padT, y.length), y.length - padT));
+    };
+    const parts = []; let s = 0; const total = cuts.length + 1;
+    for (let k = 0; k <= cuts.length; k++) {
+      const t = k < cuts.length ? cuts[k] : null;
+      const seg = t != null ? ap.subarray(s, t + 2 * PAD + WIN) : ap.subarray(s);
+      const fs = t != null ? f0p.subarray(s / WIN, (t + 2 * PAD) / WIN) : f0p.subarray(s / WIN);
+      parts.push(Float32Array.from(await convert(seg, fs)));
+      if (t != null) s = t;
+      if (onProgress) await onProgress((k + 1) / total);
+    }
+    const len = parts.reduce((q, p) => q + p.length, 0), y40 = new Float32Array(len); let o = 0; for (const p of parts) { y40.set(p, o); o += p.length; }
+    const yr = resample(y40, tgt, sr), out = new Float32Array(x.length); out.set(yr.subarray(0, Math.min(yr.length, x.length)));
+    let pk = 0; for (let i = 0; i < out.length; i++) pk = Math.max(pk, Math.abs(out[i])); if (pk > 0.99) { const g = 0.99 / pk; for (let i = 0; i < out.length; i++) out[i] *= g; }
+    return out;
+  }
+
   // ================= AI clean-up: DeepFilterNet3 (Schr\u00f6ter et al., MIT/Apache-2.0) =================
   // A trained noise-removal network, run on the whole take at 48 kHz. Sudz does the signal processing
   // (STFT, features, deep filtering, resynthesis); the network itself runs through ONNX Runtime, passed in
@@ -3742,7 +3834,7 @@ const DSP = (() => {
     return files;
   }
 
-  return { setStudioEngine, hnSplit, sibilanceHz, deessCut, declick, deplosive, deesser, aiff24, graphicEqGains, eqCurve, PB, sungLevel, aiDenoise, dfnAnalysis, dfnSynthesis, dfnFeatures, dfnRebuild, dfnWidths, fft960, wavF32, aifcF32, resample, truePeak, rideBacking, edgeKeep, loudStats, COMP_TYPES, PEQ_DEFAULT, DYN_DEFAULT, CHAIN_DEFAULT, CHAIN_NAMES, peqCoefs, respDb, biquadCoef, hardTuneCtl, alignMap, tightenCtl, deplosive, declick, dereverb, compPro, dynEq, vocoder, HARM_INTERVALS, CHOIR_PARTS, harmInterval, harmonyCtl, renderHarmony, render, singerShift, formantWarp, polish, toneProfile, wav24s, POLISH_PRESETS, POLISH_BASE, STYLE_KEYS, VERB_TYPES, denoise, MASTER_PRESETS, mixMaster, polishJob, lufs, biquad, limit2, analyse, segment, derive, newNote, markSlides, isSlideAt, declip, limit, detectEvents, readMidi, writeMidi, clipRuns, parseWav, zipFiles, readZip, buildControl, buildMarks, render, psola, findClips, wavTempo, buildTimeMap, mapF, invF, slopeF, detectKey, synthDemo, wav24, zipStore, median };
+  return { voiceConvert, vcMedianHz, vcPitch, vcCoarse, setStudioEngine, hnSplit, sibilanceHz, deessCut, declick, deplosive, deesser, aiff24, graphicEqGains, eqCurve, PB, sungLevel, aiDenoise, dfnAnalysis, dfnSynthesis, dfnFeatures, dfnRebuild, dfnWidths, fft960, wavF32, aifcF32, resample, truePeak, rideBacking, edgeKeep, loudStats, COMP_TYPES, PEQ_DEFAULT, DYN_DEFAULT, CHAIN_DEFAULT, CHAIN_NAMES, peqCoefs, respDb, biquadCoef, hardTuneCtl, alignMap, tightenCtl, deplosive, declick, dereverb, compPro, dynEq, vocoder, HARM_INTERVALS, CHOIR_PARTS, harmInterval, harmonyCtl, renderHarmony, render, singerShift, formantWarp, polish, toneProfile, wav24s, POLISH_PRESETS, POLISH_BASE, STYLE_KEYS, VERB_TYPES, denoise, MASTER_PRESETS, mixMaster, polishJob, lufs, biquad, limit2, analyse, segment, derive, newNote, markSlides, isSlideAt, declip, limit, detectEvents, readMidi, writeMidi, clipRuns, parseWav, zipFiles, readZip, buildControl, buildMarks, render, psola, findClips, wavTempo, buildTimeMap, mapF, invF, slopeF, detectKey, synthDemo, wav24, zipStore, median };
 })();
 /* DSP-END */
 </script>
@@ -6540,6 +6632,122 @@ const DSP = (() => {
     alReady();
   };
 
+  // ---------- sing it in my voice (voice conversion). Models: on the Mac in Sudz's own folder (native engine),
+  // in the browser kept in this browser's storage and run with the in-page engine (slower)
+  const VCS = { voices: [], content: false, web: {}, busy: false };
+  const vcNative = async () => { const inf = NATIVE ? await nativeAi(true) : null; return inf && inf.available ? inf : null; };
+  async function updVoiceUi() {
+    const nat = await vcNative();
+    if (nat) { VCS.voices = (nat.voices || []).map(v => ({ key: v.file, name: v.name, sr: +v.sr || 40000, medianHz: +v.medianHz || 0 })); VCS.content = !!nat.content; }
+    else {
+      try { const l = await store.get('vcVoices'); VCS.voices = Array.isArray(l) ? l : []; } catch (e) { VCS.voices = []; }
+      try { const c = await store.get('vcContentInfo'); VCS.content = !!(c && c.mb); } catch (e) { VCS.content = false; }
+    }
+    for (const id of ['vcVoiceIn', 'vcContentIn']) $(id).dataset.native = nat ? '1' : '';
+    const sel = $('vcVoice'), keep = sel.value || (ui.vcVoice || ''); sel.innerHTML = '';
+    if (!VCS.voices.length) sel.add(new Option('No voice yet', ''));
+    for (const v of VCS.voices) sel.add(new Option(v.name, v.key));
+    if ([...sel.options].some(o => o.value === keep)) sel.value = keep;
+    $('vcContent').textContent = VCS.content ? 'Installed.' : 'Not installed yet (one file, about 380 MB, made by the training notebook).';
+    $('vcContentLbl').textContent = VCS.content ? 'Replace\u2026' : 'Choose sudz_content.onnx\u2026';
+    $('vcRemove').disabled = !sel.value;
+    const v = VCS.voices.find(q => q.key === sel.value), take = P.A ? DSP.vcMedianHz(P.A) : 0;
+    const nm = (hz) => { const m = Math.round(12 * Math.log2(hz / 440)) + 69; return NAMES[((m % 12) + 12) % 12] + (Math.floor(m / 12) - 1); };
+    $('vcRange').textContent = take ? 'This take centres on ' + nm(take) + (v && v.medianHz ? '; you centre on ' + nm(v.medianHz) : '') + '.' : '';
+    $('vcAuto').disabled = !(take && v && v.medianHz);
+    $('vcGo').disabled = VCS.busy || !P.A || !sel.value || !VCS.content;
+  }
+  $('vcVoice').onchange = () => { ui.vcVoice = $('vcVoice').value; updVoiceUi(); autosaveSoon(); };
+  bindOut('vcSemi', v => (v > 0 ? '+' : '') + v + ' st');
+  $('vcAuto').onclick = () => {
+    const v = VCS.voices.find(q => q.key === $('vcVoice').value), take = P.A ? DSP.vcMedianHz(P.A) : 0; if (!v || !take || !v.medianHz) return;
+    const st = 12 * Math.round(Math.log2(v.medianHz / take));   // whole octaves, so the key stays the same
+    $('vcSemi').value = st; $('vcSemi').dispatchEvent(new Event('input'));
+  };
+  const vcInstall = async (kind) => {
+    const r = await nativeCall('pwAiInstallVoice', kind); if (!r) return;
+    if (r.error) notice(r.error); else { notice(kind === 'content' ? 'The feature model is installed in Sudz.' : 'Voice installed. Pick it under 1. Your voice.'); if (r.file && kind !== 'content') ui.vcVoice = r.file; }
+    updVoiceUi();
+  };
+  $('vcVoiceLbl').addEventListener('click', (e) => { if ($('vcVoiceIn').dataset.native !== '1') return; e.preventDefault(); e.stopPropagation(); vcInstall('voice'); });
+  $('vcContentLbl').addEventListener('click', (e) => { if ($('vcContentIn').dataset.native !== '1') return; e.preventDefault(); e.stopPropagation(); vcInstall('content'); });
+  $('vcVoiceIn').addEventListener('change', async (e) => {
+    const fs = [...e.target.files]; e.target.value = ''; const onnx = fs.find(f => /\.onnx$/i.test(f.name)); if (!onnx) return;
+    if (onnx.size < 2e7) { notice('That doesn\u2019t look like a Sudz voice model (about 110 MB).'); return; }
+    let meta = {}; const js = fs.find(f => /\.json$/i.test(f.name)); if (js) { try { meta = JSON.parse(await js.text()); } catch (err) { } }
+    const key = onnx.name, name = meta.name || onnx.name.replace(/\.onnx$/i, '');
+    try {
+      await store.put('vcVoice:' + key, { bytes: await onnx.arrayBuffer() });
+      const list = VCS.voices.filter(v => v.key !== key); list.push({ key, name, sr: +meta.sr || 40000, medianHz: +meta.median_hz || 0 });
+      await store.put('vcVoices', list); ui.vcVoice = key; VCS.web.voiceKey = null;
+    } catch (err) { notice('This browser couldn\u2019t keep the voice model (' + (err.message || err) + ').'); }
+    updVoiceUi();
+  });
+  $('vcContentIn').addEventListener('change', async (e) => {
+    const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+    if (f.size < 2e8) { notice('That doesn\u2019t look like the feature model (about 380 MB).'); return; }
+    try { await store.put('vcContent', { bytes: await f.arrayBuffer() }); await store.put('vcContentInfo', { mb: f.size / 1e6 }); VCS.web.content = null; }
+    catch (err) { notice('This browser couldn\u2019t keep the feature model (' + (err.message || err) + ').'); }
+    updVoiceUi();
+  });
+  $('vcRemove').onclick = async () => {
+    const key = $('vcVoice').value; if (!key) return;
+    if ($('vcRemove').dataset.sure !== '1') { $('vcRemove').dataset.sure = '1'; $('vcRemove').textContent = 'Remove?'; setTimeout(() => { $('vcRemove').dataset.sure = ''; $('vcRemove').textContent = 'Remove'; }, 3000); return; }
+    if (await vcNative()) await nativeCall('pwAiRemoveVoice', key);
+    else { try { await store.put('vcVoices', VCS.voices.filter(v => v.key !== key)); await store.put('vcVoice:' + key, null); } catch (e) { } }
+    updVoiceUi();
+  };
+  // the two networks, as a run(name, feeds) like the clean-up's
+  async function vcRunner(key, say) {
+    if (await vcNative()) {
+      for (const which of ['content', 'voice:' + key]) {
+        say(which === 'content' ? 'Loading the feature model\u2026' : 'Loading your voice\u2026');
+        const r = await nativeCall('pwAiLoad', which); if (!r || !r.ok) throw new Error((r && r.error) || 'the engine didn\u2019t start');
+      }
+      return async (name, feeds) => {
+        const inputs = {}; for (const k in feeds) { const [d, dims, type] = feeds[k]; inputs[k] = type === 'int64' ? { dims, type, b64: f32b64(new Float32Array(d.buffer, d.byteOffset, d.byteLength / 4)) } : tensorJson(feeds[k]); }
+        const r = await nativeCall('pwAiRun', name, JSON.stringify({ inputs, want: [name === 'content' ? 'features' : 'audio'] }));
+        if (!r || r.error || !r.outputs) throw new Error((r && r.error) || 'no answer from the engine');
+        const o = {}; for (const k in r.outputs) o[k] = [b64f32(r.outputs[k].b64), r.outputs[k].dims]; return o;
+      };
+    }
+    // in the browser: the page's own engine
+    if (!window.ort || !AIE.web) {
+      const s0 = AIE.sess, n0 = AIE.noNative; AIE.sess = null; AIE.noNative = true;
+      try { AIE.web = await aiEngine((t) => say(t)); } finally { AIE.noNative = n0; AIE.sess = s0 && !s0.native ? s0 : s0; if (!s0) AIE.sess = null; }
+    }
+    const opts = { executionProviders: ['wasm'], graphOptimizationLevel: 'disabled', enableCpuMemArena: false };
+    if (!VCS.web.content) { say('Loading the feature model\u2026'); const m = await store.get('vcContent'); if (!m || !m.bytes) throw new Error('the feature model isn\u2019t loaded'); VCS.web.content = await ort.InferenceSession.create(new Uint8Array(m.bytes), opts); }
+    if (VCS.web.voiceKey !== key) { say('Loading your voice\u2026'); const m = await store.get('vcVoice:' + key); if (!m || !m.bytes) throw new Error('that voice isn\u2019t in this browser'); VCS.web.voice = await ort.InferenceSession.create(new Uint8Array(m.bytes), opts); VCS.web.voiceKey = key; }
+    return async (name, feeds) => {
+      const f = {}; for (const k in feeds) f[k] = new ort.Tensor(feeds[k][2] || 'float32', feeds[k][0], feeds[k][1]);
+      const r = await (name === 'content' ? VCS.web.content : VCS.web.voice).run(f), o = {}; for (const k in r) o[k] = [r[k].data, r[k].dims];
+      await new Promise(res => setTimeout(res, 0)); return o;
+    };
+  }
+  $('vcGo').onclick = async () => {
+    const key = $('vcVoice').value, v = VCS.voices.find(q => q.key === key); if (!P.A || !v || VCS.busy) return;
+    VCS.busy = true; updVoiceUi(); stop(true);
+    const say = (t) => { $('vcHint').textContent = t; }, prog = $('vcProg'); prog.hidden = false; prog.value = 0;
+    try {
+      const run = await vcRunner(key, say), t0 = performance.now(), semi = +$('vcSemi').value;
+      say('Singing it in your voice\u2026 0%');
+      const y = await DSP.voiceConvert(P.x, P.sr, P.A, run, { transpose: semi, tgtSr: v.sr }, async (fr) => {
+        prog.value = fr; const el = (performance.now() - t0) / 1000, left = el / fr * (1 - fr);
+        say('Singing it in your voice\u2026 ' + Math.round(fr * 100) + '%' + (fr < 1 ? ' \u00b7 about ' + (left > 90 ? Math.round(left / 60) + ' min' : Math.max(5, Math.round(left / 5) * 5) + ' s') + ' left' : '')); await tick();
+      });
+      const name = (P.name || 'Take').replace(/ \(in .*\)$/, '') + ' (in ' + v.name + '\u2019s voice)';
+      if (PLUGIN) {
+        // the converted take becomes the transferred recording, so it's saved with the GarageBand song
+        const CH = 65536; for (let a = 0; a < y.length; a += CH) await nativeCall('pwPutTransfer', a, f32b64(y.subarray(a, Math.min(y.length, a + CH))));
+      }
+      await load(y, P.sr, name);
+      if (PLUGIN) { lastSent = new Float32Array(y.length); schedulePush(); }
+      say('Done in ' + Math.round((performance.now() - t0) / 1000) + ' s' + (semi ? ', moved ' + (semi > 0 ? '+' : '') + semi + ' semitones' : '') + '. It\u2019s now the take you\u2019re editing: tune and polish it as usual. Undo can\u2019t bring the original back, so keep the original file.');
+    } catch (err) { say('Couldn\u2019t convert: ' + (err.message || err) + '.'); }
+    VCS.busy = false; prog.hidden = true; updVoiceUi();
+  };
+
   // ---------- singer presets: kept in this browser, or (plug-in and app) in a file both of them share
   const SG_KEYS = ['transMs', 'drawMove', 'sibDb', 'brDb', 'protectEdges', 'polish', 'byp', 'live'];
   async function loadSingers() {
@@ -6922,7 +7130,7 @@ const DSP = (() => {
   }
   $('stackDblIn').addEventListener('change', (e) => { const f = e.target.files[0]; e.target.value = ''; if (f && P.A) addStack(f, 'double'); });
   $('stackAdlIn').addEventListener('change', (e) => { const f = e.target.files[0]; e.target.value = ''; if (f && P.A) addStack(f, 'adlib'); });
-  for (const id of ['stackDblLbl', 'stackAdlLbl', 'myImportLbl', 'refLbl', 'alFileLbl']) $(id).addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $(id).click(); } });
+  for (const id of ['stackDblLbl', 'stackAdlLbl', 'myImportLbl', 'refLbl', 'alFileLbl', 'vcVoiceLbl', 'vcContentLbl']) $(id).addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $(id).click(); } });
 
   // ---- parametric EQ: drag the points on the curve
   const PEQ_LABEL = ['Low cut', 'Low shelf', 'Bell 1', 'Bell 2', 'Bell 3', 'High shelf'];
@@ -7295,7 +7503,7 @@ const DSP = (() => {
     function openPanel(id, anchor) {
       const pn = $(id); if (!pn) return;
       if (!pn.hidden) { front(pn); return; }
-      pn.hidden = false; front(pn); if (id === 'pnl-history') updHistory(); if (id === 'pnl-singers') updSingers(); if (id === 'pnl-align') updAlignPeers();
+      pn.hidden = false; front(pn); if (id === 'pnl-history') updHistory(); if (id === 'pnl-singers') updSingers(); if (id === 'pnl-align') updAlignPeers(); if (id === 'pnl-voice') updVoiceUi();
       const w = pn.offsetWidth, h = pn.offsetHeight, vw = innerWidth, vh = innerHeight;
       if (matchMedia('(max-width:820px)').matches) for (const q of document.querySelectorAll('.panel')) if (q !== pn) q.hidden = true;
       const st = $('stage').getBoundingClientRect();

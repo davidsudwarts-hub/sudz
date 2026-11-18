@@ -33,6 +33,8 @@ private:
     juce::var stateObject() const;
     juce::WebBrowserComponent::Options makeOptions();
     static juce::File splitModelFile();
+    static juce::File voicesDir();
+    static juce::File contentModelFile();
     void runAiJob (juce::WebBrowserComponent::NativeFunctionCompletion complete, std::function<juce::var()> job);
 
     SudzProcessor& proc;

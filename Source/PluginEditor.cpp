@@ -16,6 +16,16 @@ namespace
     }
 }
 
+juce::File SudzEditor::voicesDir()
+{
+    return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory).getChildFile ("Sudz").getChildFile ("voices");
+}
+
+juce::File SudzEditor::contentModelFile()
+{
+    return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory).getChildFile ("Sudz").getChildFile ("models").getChildFile ("sudz_content.onnx");
+}
+
 juce::File SudzEditor::splitModelFile()
 {
     return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory).getChildFile ("Sudz").getChildFile ("models").getChildFile ("htdemucs_ft_vocals.onnx");
@@ -70,6 +80,21 @@ juce::WebBrowserComponent::Options SudzEditor::makeOptions()
                 {
                     const auto numSamples = (int) (decoded.getDataSize() / sizeof (float));
                     proc.writeRendered ((int) args[0], static_cast<const float*> (decoded.getData()), numSamples);
+                    complete (numSamples);
+                    return;
+                }
+            }
+            complete (false);
+        })
+        .withNativeFunction ("pwPutTransfer", [this] (const juce::Array<juce::var>& args, auto complete)
+        {
+            if (args.size() >= 2)
+            {
+                juce::MemoryOutputStream decoded;
+                if (juce::Base64::convertFromBase64 (decoded, args[1].toString()))
+                {
+                    const auto numSamples = (int) (decoded.getDataSize() / sizeof (float));
+                    proc.writeTransfer ((int) args[0], static_cast<const float*> (decoded.getData()), numSamples);
                     complete (numSamples);
                     return;
                 }
@@ -145,6 +170,22 @@ juce::WebBrowserComponent::Options SudzEditor::makeOptions()
             o->setProperty ("threads", ai.threads());
             const auto split = splitModelFile();
             o->setProperty ("split", split.existsAsFile()); o->setProperty ("splitMB", (double) split.getSize() / 1e6);
+            // voice conversion: the shared feature model and the trained voices (each an .onnx with a .json beside it)
+            o->setProperty ("content", contentModelFile().existsAsFile());
+            juce::Array<juce::var> voices;
+            for (const auto& f : voicesDir().findChildFiles (juce::File::findFiles, false, "*.onnx"))
+            {
+                auto meta = juce::JSON::parse (f.withFileExtension (".onnx.json").existsAsFile() ? f.withFileExtension (".onnx.json").loadFileAsString()
+                                                                                                    : juce::File (f.getFullPathName() + ".json").loadFileAsString());
+                auto* v = new juce::DynamicObject();
+                v->setProperty ("file", f.getFileName());
+                v->setProperty ("name", meta["name"].toString().isNotEmpty() ? meta["name"].toString() : f.getFileNameWithoutExtension());
+                v->setProperty ("sr", meta["sr"].isVoid() ? juce::var (40000) : meta["sr"]);
+                v->setProperty ("medianHz", meta["median_hz"].isVoid() ? juce::var (0) : meta["median_hz"]);
+                v->setProperty ("mb", (double) f.getSize() / 1e6);
+                voices.add (juce::var (v));
+            }
+            o->setProperty ("voices", voices);
             complete (juce::var (o));
         })
         .withNativeFunction ("pwAiLoad", [this] (const juce::Array<juce::var>& args, auto complete)
@@ -176,6 +217,20 @@ juce::WebBrowserComponent::Options SudzEditor::makeOptions()
                     if (! f.existsAsFile()) { ok = false; err = "the separation model isn't installed"; }
                     else if (! ai.has ("split")) ok = ai.loadFile ("split", f, false, err);
                 }
+                else if (which == "content")
+                {
+                    const auto f = contentModelFile();
+                    if (! f.existsAsFile()) { ok = false; err = "the voice feature model isn't installed"; }
+                    else if (! ai.has ("content")) ok = ai.loadFile ("content", f, false, err);
+                }
+                else if (which.startsWith ("voice:"))
+                {
+                    // one voice loaded at a time, as the session "voice"
+                    static juce::String loadedVoice;
+                    const auto f = voicesDir().getChildFile (juce::File::createLegalFileName (which.fromFirstOccurrenceOf ("voice:", false, false)));
+                    if (! f.existsAsFile()) { ok = false; err = "that voice model isn't installed"; }
+                    else if (! ai.has ("voice") || loadedVoice != f.getFullPathName()) { ok = ai.loadFile ("voice", f, false, err); if (ok) loadedVoice = f.getFullPathName(); }
+                }
                 else { ok = false; err = "unknown network"; }
                 o->setProperty ("ok", ok); if (! ok) o->setProperty ("error", err);
                 return res;
@@ -198,8 +253,9 @@ juce::WebBrowserComponent::Options SudzEditor::makeOptions()
                         if (auto* d = kv.value["dims"].getArray()) for (const auto& v : *d) t.dims.push_back ((int64_t) (double) v);
                         juce::MemoryOutputStream raw;
                         juce::Base64::convertFromBase64 (raw, kv.value["b64"].toString());
-                        t.data.resize (raw.getDataSize() / sizeof (float));
-                        std::memcpy (t.data.data(), raw.getData(), t.data.size() * sizeof (float));
+                        t.isInt = kv.value["type"].toString() == "int64";
+                        if (t.isInt) { t.ints.resize (raw.getDataSize() / sizeof (int64_t)); std::memcpy (t.ints.data(), raw.getData(), t.ints.size() * sizeof (int64_t)); }
+                        else { t.data.resize (raw.getDataSize() / sizeof (float)); std::memcpy (t.data.data(), raw.getData(), t.data.size() * sizeof (float)); }
                     }
                 std::vector<std::string> chain, want;
                 for (const auto& s : juce::StringArray::fromTokens (chainCsv, ",", "")) chain.push_back (s.trim().toStdString());
@@ -223,6 +279,35 @@ juce::WebBrowserComponent::Options SudzEditor::makeOptions()
                 o->setProperty ("ms", juce::Time::getMillisecondCounterHiRes() - t0);
                 return res;
             });
+        })
+        .withNativeFunction ("pwAiInstallVoice", [this] (const juce::Array<juce::var>& args, auto complete)
+        {
+            // kind "voice": a trained voice (.onnx, its .json is copied too); kind "content": the shared feature model
+            const bool content = args.size() > 0 && args[0].toString() == "content";
+            chooser = std::make_unique<juce::FileChooser> (content ? "Choose the voice feature model (sudz_content.onnx)" : "Choose your voice model (.onnx)",
+                                                           juce::File::getSpecialLocation (juce::File::userHomeDirectory).getChildFile ("Downloads"), "*.onnx");
+            chooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
+                                  [complete, content] (const juce::FileChooser& fc)
+                                  {
+                                      const auto f = fc.getResult();
+                                      auto* o = new juce::DynamicObject(); juce::var res (o);
+                                      if (! f.existsAsFile()) { complete (juce::var()); return; }
+                                      const auto mb = (double) f.getSize() / 1e6;
+                                      if (content ? mb < 200 : (mb < 20 || mb > 400)) { o->setProperty ("error", content ? "That doesn't look like the feature model (about 380 MB)." : "That doesn't look like a Sudz voice model (about 110 MB)."); complete (res); return; }
+                                      const auto dst = content ? contentModelFile() : voicesDir().getChildFile (f.getFileName());
+                                      dst.getParentDirectory().createDirectory();
+                                      if (! f.copyFileTo (dst)) { o->setProperty ("error", "The model couldn't be copied into Sudz's folder."); complete (res); return; }
+                                      if (! content) { const juce::File meta (f.getFullPathName() + ".json"); if (meta.existsAsFile()) meta.copyFileTo (juce::File (dst.getFullPathName() + ".json")); }
+                                      o->setProperty ("ok", true); o->setProperty ("mb", mb); o->setProperty ("file", dst.getFileName());
+                                      complete (res);
+                                  });
+        })
+        .withNativeFunction ("pwAiRemoveVoice", [] (const juce::Array<juce::var>& args, auto complete)
+        {
+            const auto f = voicesDir().getChildFile (juce::File::createLegalFileName (args.size() > 0 ? args[0].toString() : juce::String()));
+            const bool ok = f.existsAsFile() && f.getParentDirectory() == voicesDir() && f.moveToTrash();
+            juce::File (f.getFullPathName() + ".json").moveToTrash();
+            complete (ok);
         })
         .withNativeFunction ("pwAiInstallSplit", [this] (const juce::Array<juce::var>&, auto complete)
         {

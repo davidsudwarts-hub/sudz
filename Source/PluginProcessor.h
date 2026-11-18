@@ -87,6 +87,7 @@ public:
 
     /** Writes tuned samples into the playback buffer (offset is in samples from the transfer start). */
     void writeRendered (int offset, const float* samples, int numSamples);
+    void writeTransfer (int offset, const float* samples, int numSamples);
     void setPlayOriginal (bool b)                         { playOriginal.store (b); }
 
     /** Live effects: the editor's polish settings as JSON (see SudzFx.h for the keys). */

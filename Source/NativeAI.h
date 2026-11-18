@@ -20,7 +20,9 @@ namespace sudzai
 struct Tensor
 {
     std::vector<int64_t> dims;
-    std::vector<float> data;
+    std::vector<float> data;          // float tensors
+    std::vector<int64_t> ints;        // int64 tensors (lengths, pitch steps, speaker ids)
+    bool isInt = false;
 };
 using TensorMap = std::map<std::string, Tensor>;
 

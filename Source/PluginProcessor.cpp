@@ -421,6 +421,16 @@ void SudzProcessor::writeRendered (int offset, const float* samples, int numSamp
     std::memcpy (rendered.data() + offset, samples, (end - (size_t) offset) * sizeof (float));
 }
 
+void SudzProcessor::writeTransfer (int offset, const float* samples, int numSamples)
+{
+    // replaces part of the transferred recording itself (a voice conversion becomes the new source, saved with the song)
+    const juce::ScopedLock sl (transferLock);
+    if (offset < 0 || numSamples <= 0) return;
+    const auto end = std::min ((size_t) offset + (size_t) numSamples, transfer.size());
+    if ((size_t) offset >= end) return;
+    std::memcpy (transfer.data() + offset, samples, (end - (size_t) offset) * sizeof (float));
+}
+
 juce::MemoryBlock SudzProcessor::transferAsWav() const
 {
     const juce::ScopedLock sl (transferLock);

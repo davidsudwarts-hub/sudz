@@ -190,9 +190,12 @@ bool Engine::runChain (const std::vector<std::string>& chain, const TensorMap& i
         OrtValue* v = nullptr;
         auto& t = const_cast<Tensor&> (kv.second);
         size_t count = 1; for (auto d : t.dims) count *= (size_t) std::max<int64_t> (0, d);
-        if (count != t.data.size()) { err = "input " + juce::String (kv.first) + " has the wrong size"; good = false; break; }
-        if (! check (a, a->CreateTensorWithDataAsOrtValue (mem, t.data.data(), t.data.size() * sizeof (float), t.dims.data(), t.dims.size(),
-                                                           ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT, &v), err)) { good = false; break; }
+        if (count != (t.isInt ? t.ints.size() : t.data.size())) { err = "input " + juce::String (kv.first) + " has the wrong size"; good = false; break; }
+        const bool made = t.isInt ? check (a, a->CreateTensorWithDataAsOrtValue (mem, t.ints.data(), t.ints.size() * sizeof (int64_t), t.dims.data(), t.dims.size(),
+                                                                                  ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64, &v), err)
+                                  : check (a, a->CreateTensorWithDataAsOrtValue (mem, t.data.data(), t.data.size() * sizeof (float), t.dims.data(), t.dims.size(),
+                                                                                  ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT, &v), err);
+        if (! made) { good = false; break; }
         owned.push_back (v); pool[kv.first] = v;
     }
 
