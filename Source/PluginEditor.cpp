@@ -18,17 +18,17 @@ namespace
 
 juce::File SudzEditor::voicesDir()
 {
-    return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory).getChildFile ("Sudz").getChildFile ("voices");
+    return sudzai::sudzDataDir().getChildFile ("voices");
 }
 
 juce::File SudzEditor::contentModelFile()
 {
-    return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory).getChildFile ("Sudz").getChildFile ("models").getChildFile ("sudz_content.onnx");
+    return sudzai::sudzDataDir().getChildFile ("models").getChildFile ("sudz_content.onnx");
 }
 
 juce::File SudzEditor::splitModelFile()
 {
-    return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory).getChildFile ("Sudz").getChildFile ("models").getChildFile ("htdemucs_ft_vocals.onnx");
+    return sudzai::sudzDataDir().getChildFile ("models").getChildFile ("htdemucs_ft_vocals.onnx");
 }
 
 // AI work runs on the engine's own thread; the answer goes back to the page on the message thread, if the window is still open
@@ -136,14 +136,14 @@ juce::WebBrowserComponent::Options SudzEditor::makeOptions()
         .withNativeFunction ("pwLoadPrefs", [] (const juce::Array<juce::var>& args, auto complete)
         {
             const auto name = juce::File::createLegalFileName (args.size() > 0 ? args[0].toString() : juce::String ("prefs")).substring (0, 60);
-            const auto f = juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory).getChildFile ("Sudz").getChildFile (name + ".json");
+            const auto f = sudzai::sudzDataDir().getChildFile (name + ".json");
             complete (f.existsAsFile() ? juce::var (f.loadFileAsString()) : juce::var());
         })
         .withNativeFunction ("pwSavePrefs", [] (const juce::Array<juce::var>& args, auto complete)
         {
             if (args.size() < 2) { complete (false); return; }
             const auto name = juce::File::createLegalFileName (args[0].toString()).substring (0, 60);
-            const auto dir = juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory).getChildFile ("Sudz");
+            const auto dir = sudzai::sudzDataDir();
             dir.createDirectory();
             complete (dir.getChildFile (name + ".json").replaceWithText (args[1].toString().substring (0, 4000000)));
         })

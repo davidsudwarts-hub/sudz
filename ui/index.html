@@ -2806,11 +2806,11 @@ const DSP = (() => {
     return y;
   }
   function vcCoarse(f0) {
-    const mn = 1127 * Math.log(1 + VC.F0MIN / 700), mx = 1127 * Math.log(1 + VC.F0MAX / 700), c = new BigInt64Array(f0.length);
+    const mn = 1127 * Math.log(1 + VC.F0MIN / 700), mx = 1127 * Math.log(1 + VC.F0MAX / 700), c = new Int32Array(f0.length);
     for (let i = 0; i < f0.length; i++) {
       let m = 1127 * Math.log(1 + f0[i] / 700);
       if (m > 0) m = (m - mn) * 254 / (mx - mn) + 1;
-      c[i] = BigInt(Math.round(Math.max(1, Math.min(255, m))));
+      c[i] = Math.round(Math.max(1, Math.min(255, m)));
     }
     return c;
   }
@@ -2827,6 +2827,13 @@ const DSP = (() => {
   function vcMedianHz(A) {
     const v = []; for (let i = 0; i < A.nf; i++) if (A.voiced[i] && isFinite(A.cents[i])) v.push(A.cents[i]);
     if (!v.length) return 0; v.sort((a, b) => a - b); return 440 * Math.pow(2, (v[v.length >> 1] - 6900) / 1200);
+  }
+  // int64 inputs are passed as whole numbers (Int32Array); runners widen them to 8 bytes each (macOS 11's web
+  // engine has no BigInt64Array). Little-endian, sign-extended.
+  function i64Bytes(a) {
+    const u = new Uint8Array(a.length * 8), dv = new DataView(u.buffer);
+    for (let i = 0; i < a.length; i++) { dv.setInt32(i * 8, a[i], true); dv.setInt32(i * 8 + 4, a[i] < 0 ? -1 : 0, true); }
+    return u;
   }
   async function voiceConvert(x, sr, A, run, opts = {}, onProgress) {
     const SR = VC.SR, WIN = VC.WIN, PAD = SR, tgt = opts.tgtSr || 40000, padT = tgt;
@@ -2852,8 +2859,8 @@ const DSP = (() => {
       for (let t = 0; t < pLen; t++) ph.set(F.subarray((t >> 1) * D, ((t >> 1) + 1) * D), t * D);     // features doubled to 10 ms
       const pf = new Float32Array(pLen); pf.set(f0s.subarray(0, Math.min(pLen, f0s.length)));
       const rnd = new Float32Array(192 * pLen); for (let i = 0; i < rnd.length; i++) rnd[i] = gauss();
-      const o = await run('voice', { phone: [ph, [1, pLen, D]], phone_lengths: [BigInt64Array.from([BigInt(pLen)]), [1], 'int64'], pitch: [vcCoarse(pf), [1, pLen], 'int64'],
-        pitchf: [pf, [1, pLen]], sid: [BigInt64Array.from([BigInt(opts.sid || 0)]), [1], 'int64'], rnd: [rnd, [1, 192, pLen]] });
+      const o = await run('voice', { phone: [ph, [1, pLen, D]], phone_lengths: [Int32Array.of(pLen), [1], 'int64'], pitch: [vcCoarse(pf), [1, pLen], 'int64'],
+        pitchf: [pf, [1, pLen]], sid: [Int32Array.of(opts.sid || 0), [1], 'int64'], rnd: [rnd, [1, 192, pLen]] });
       const y = o.audio[0]; return y.subarray(Math.min(padT, y.length), Math.max(Math.min(padT, y.length), y.length - padT));
     };
     const parts = []; let s = 0; const total = cuts.length + 1;
@@ -3835,7 +3842,7 @@ const DSP = (() => {
     return files;
   }
 
-  return { voiceConvert, vcMedianHz, vcPitch, vcCoarse, setStudioEngine, hnSplit, sibilanceHz, deessCut, declick, deplosive, deesser, aiff24, graphicEqGains, eqCurve, PB, sungLevel, aiDenoise, dfnAnalysis, dfnSynthesis, dfnFeatures, dfnRebuild, dfnWidths, fft960, wavF32, aifcF32, resample, truePeak, rideBacking, edgeKeep, loudStats, COMP_TYPES, PEQ_DEFAULT, DYN_DEFAULT, CHAIN_DEFAULT, CHAIN_NAMES, peqCoefs, respDb, biquadCoef, hardTuneCtl, alignMap, tightenCtl, deplosive, declick, dereverb, compPro, dynEq, vocoder, HARM_INTERVALS, CHOIR_PARTS, harmInterval, harmonyCtl, renderHarmony, render, singerShift, formantWarp, polish, toneProfile, wav24s, POLISH_PRESETS, POLISH_BASE, STYLE_KEYS, VERB_TYPES, denoise, MASTER_PRESETS, mixMaster, polishJob, lufs, biquad, limit2, analyse, segment, derive, newNote, markSlides, isSlideAt, declip, limit, detectEvents, readMidi, writeMidi, clipRuns, parseWav, zipFiles, readZip, buildControl, buildMarks, render, psola, findClips, wavTempo, buildTimeMap, mapF, invF, slopeF, detectKey, synthDemo, wav24, zipStore, median };
+  return { i64Bytes, voiceConvert, vcMedianHz, vcPitch, vcCoarse, setStudioEngine, hnSplit, sibilanceHz, deessCut, declick, deplosive, deesser, aiff24, graphicEqGains, eqCurve, PB, sungLevel, aiDenoise, dfnAnalysis, dfnSynthesis, dfnFeatures, dfnRebuild, dfnWidths, fft960, wavF32, aifcF32, resample, truePeak, rideBacking, edgeKeep, loudStats, COMP_TYPES, PEQ_DEFAULT, DYN_DEFAULT, CHAIN_DEFAULT, CHAIN_NAMES, peqCoefs, respDb, biquadCoef, hardTuneCtl, alignMap, tightenCtl, deplosive, declick, dereverb, compPro, dynEq, vocoder, HARM_INTERVALS, CHOIR_PARTS, harmInterval, harmonyCtl, renderHarmony, render, singerShift, formantWarp, polish, toneProfile, wav24s, POLISH_PRESETS, POLISH_BASE, STYLE_KEYS, VERB_TYPES, denoise, MASTER_PRESETS, mixMaster, polishJob, lufs, biquad, limit2, analyse, segment, derive, newNote, markSlides, isSlideAt, declip, limit, detectEvents, readMidi, writeMidi, clipRuns, parseWav, zipFiles, readZip, buildControl, buildMarks, render, psola, findClips, wavTempo, buildTimeMap, mapF, invF, slopeF, detectKey, synthDemo, wav24, zipStore, median };
 })();
 /* DSP-END */
 </script>
@@ -6718,7 +6725,7 @@ const DSP = (() => {
         const r = await nativeCall('pwAiLoad', which); if (!r || !r.ok) throw new Error((r && r.error) || 'the engine didn\u2019t start');
       }
       return async (name, feeds) => {
-        const inputs = {}; for (const k in feeds) { const [d, dims, type] = feeds[k]; inputs[k] = type === 'int64' ? { dims, type, b64: f32b64(new Float32Array(d.buffer, d.byteOffset, d.byteLength / 4)) } : tensorJson(feeds[k]); }
+        const inputs = {}; for (const k in feeds) { const [d, dims, type] = feeds[k]; inputs[k] = type === 'int64' ? { dims, type, b64: u8b64(DSP.i64Bytes(d)) } : tensorJson(feeds[k]); }
         const r = await nativeCall('pwAiRun', name, JSON.stringify({ inputs, want: [name === 'content' ? 'features' : 'audio'] }));
         if (!r || r.error || !r.outputs) throw new Error((r && r.error) || 'no answer from the engine');
         const o = {}; for (const k in r.outputs) o[k] = [b64f32(r.outputs[k].b64), r.outputs[k].dims]; return o;
@@ -6733,7 +6740,8 @@ const DSP = (() => {
     if (!VCS.web.content) { say('Loading the feature model\u2026'); const m = await store.get('vcContent'); if (!m || !m.bytes) throw new Error('the feature model isn\u2019t loaded'); VCS.web.content = await ort.InferenceSession.create(new Uint8Array(await asBuffer(m.bytes)), opts); }
     if (VCS.web.voiceKey !== key) { say('Loading your voice\u2026'); const m = await store.get('vcVoice:' + key); if (!m || !m.bytes) throw new Error('that voice isn\u2019t in this browser'); VCS.web.voice = await ort.InferenceSession.create(new Uint8Array(await asBuffer(m.bytes)), opts); VCS.web.voiceKey = key; }
     return async (name, feeds) => {
-      const f = {}; for (const k in feeds) f[k] = new ort.Tensor(feeds[k][2] || 'float32', feeds[k][0], feeds[k][1]);
+      if (typeof BigInt64Array === 'undefined') throw new Error('this browser is too old to run voices (it has no BigInt64Array); use the Sudz app on the Mac, or Chrome');
+      const f = {}; for (const k in feeds) { const [d, dims, type] = feeds[k]; f[k] = type === 'int64' ? new ort.Tensor('int64', BigInt64Array.from(d, v => BigInt(v)), dims) : new ort.Tensor('float32', d, dims); }
       const r = await (name === 'content' ? VCS.web.content : VCS.web.voice).run(f), o = {}; for (const k in r) o[k] = [r[k].data, r[k].dims];
       await new Promise(res => setTimeout(res, 0)); return o;
     };

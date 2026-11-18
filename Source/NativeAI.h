@@ -17,6 +17,10 @@
     One engine per process (GarageBand runs every Sudz instance in one process), shared by all instances. */
 namespace sudzai
 {
+/** Sudz's own folder: ~/Library/Application Support/Sudz on the Mac (JUCE's "user application data" is ~/Library
+    there, which is where builds before 0.17.2 looked by mistake: anything left in ~/Library/Sudz is moved across). */
+juce::File sudzDataDir();
+
 struct Tensor
 {
     std::vector<int64_t> dims;

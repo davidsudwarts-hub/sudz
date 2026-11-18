@@ -5,6 +5,31 @@
 
 namespace sudzai
 {
+juce::File sudzDataDir()
+{
+    const auto base = juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory);
+   #if JUCE_MAC
+    const auto dir = base.getChildFile ("Application Support").getChildFile ("Sudz");
+    static std::once_flag moved;
+    std::call_once (moved, [dir, old = base.getChildFile ("Sudz")]
+    {
+        if (! old.isDirectory()) return;
+        dir.createDirectory();
+        for (const auto& f : old.findChildFiles (juce::File::findFilesAndDirectories, false))
+        {
+            const auto dst = dir.getChildFile (f.getFileName());
+            if (! dst.exists()) f.moveFileTo (dst);
+            else if (f.isDirectory())   // merge folders such as voices/ and models/
+                for (const auto& g : f.findChildFiles (juce::File::findFiles, false))
+                    if (! dst.getChildFile (g.getFileName()).exists()) g.moveFileTo (dst.getChildFile (g.getFileName()));
+        }
+    });
+    return dir;
+   #else
+    return base.getChildFile ("Sudz");
+   #endif
+}
+
 namespace
 {
     const OrtApi* A (const void* p) { return static_cast<const OrtApi*> (p); }
@@ -53,7 +78,8 @@ bool Engine::available()
     const juce::String names[] = { "libonnxruntime.dylib", "libonnxruntime.1.19.2.dylib", "libonnxruntime.so" };
     const juce::File dirs[] = {
         bundleFrameworks(),
-        juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory).getChildFile ("Sudz").getChildFile ("lib")
+        sudzDataDir().getChildFile ("lib"),
+        juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory).getChildFile ("Sudz").getChildFile ("lib")   // 0.17.1 and earlier
     };
     juce::StringArray tried_;
     for (const auto& d : dirs)
