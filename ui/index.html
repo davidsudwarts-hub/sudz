@@ -756,6 +756,8 @@ details.fine[open] summary{margin-bottom:6px}
         <p class="hint">Re-sings the take that&#x2019;s open (a guide vocal, a demo, an AI vocal) in your own voice, keeping its melody, words and timing. You need a voice model trained on your singing: see <a href="https://github.com/davidsudwarts-hub/sudz/blob/main/voice/TRAIN-YOUR-VOICE.md" target="_blank" rel="noopener">Train your voice</a> (about an hour in Google Colab, once).</p>
         <div class="row"><b style="align-self:center">1. Your voice</b><select id="vcVoice" aria-label="Voice model"></select><label class="btn" for="vcVoiceIn" tabindex="0" id="vcVoiceLbl">Add a voice model&#x2026;</label><input type="file" id="vcVoiceIn" accept=".onnx,.json" multiple hidden><button id="vcRemove">Remove</button></div>
         <div class="row"><b style="align-self:center">2. Feature model</b><span class="hint" id="vcContent" style="align-self:center"></span><label class="btn" for="vcContentIn" tabindex="0" id="vcContentLbl">Choose sudz_content.onnx&#x2026;</label><input type="file" id="vcContentIn" accept=".onnx" hidden></div>
+        <div class="ctl"><label for="vcLike">Voice likeness</label><output id="vcLikeO">75%</output><input type="range" id="vcLike" min="0" max="100" step="5" value="75"></div>
+        <p class="hint" id="vcLikeHint">How strongly each moment is pulled towards how you actually sound in your training recordings. Higher sounds more like you; very high can smudge the words a little.</p>
         <div class="ctl"><label for="vcSemi">Move the melody</label><output id="vcSemiO">0 st</output><input type="range" id="vcSemi" min="-24" max="24" step="1" value="0"></div>
         <div class="row"><button id="vcAuto" title="Move the take up or down by whole octaves so it sits where you sing (keeps the key)">Match my range</button><span class="hint" id="vcRange" style="align-self:center"></span></div>
         <button id="vcGo" class="primary" disabled>Convert this take to my voice</button>
@@ -2821,6 +2823,15 @@ const DSP = (() => {
       const t = (j * VC.WIN + VC.WIN / 2) / VC.SR, i = Math.round(t * sr / A.hop);
       if (i >= 0 && i < A.nf && A.voiced[i] && isFinite(A.cents[i])) f0[j] = Math.min(VC.F0MAX, 440 * Math.pow(2, (A.cents[i] - 6900) / 1200) * k);
     }
+    // octave slips (a tracker reading half or double the note for a moment, common on doubled or breathy vocals)
+    // are folded back to the octave the neighbouring 150 ms sit in
+    const R = 7, c = Array.from(f0, v => v > 0 ? 1200 * Math.log2(v / 440) : NaN);
+    for (let j = 0; j < nf; j++) {
+      if (!(f0[j] > 0)) continue;
+      const w = []; for (let q = Math.max(0, j - R); q <= Math.min(nf - 1, j + R); q++) if (!isNaN(c[q])) w.push(c[q]);
+      if (w.length < 5) continue; w.sort((a, b) => a - b); const med = w[w.length >> 1], d = c[j] - med;
+      if (Math.abs(d) > 900) f0[j] *= Math.pow(2, -Math.round(d / 1200));
+    }
     return f0;
   }
   // typical pitch of a take (Hz, median of the sung frames)
@@ -2860,7 +2871,8 @@ const DSP = (() => {
       const pf = new Float32Array(pLen); pf.set(f0s.subarray(0, Math.min(pLen, f0s.length)));
       const rnd = new Float32Array(192 * pLen); for (let i = 0; i < rnd.length; i++) rnd[i] = gauss();
       const o = await run('voice', { phone: [ph, [1, pLen, D]], phone_lengths: [Int32Array.of(pLen), [1], 'int64'], pitch: [vcCoarse(pf), [1, pLen], 'int64'],
-        pitchf: [pf, [1, pLen]], sid: [Int32Array.of(opts.sid || 0), [1], 'int64'], rnd: [rnd, [1, 192, pLen]] });
+        pitchf: [pf, [1, pLen]], sid: [Int32Array.of(opts.sid || 0), [1], 'int64'], rnd: [rnd, [1, 192, pLen]],
+        ...(opts.index ? { index_rate: [Float32Array.of(opts.indexRate != null ? opts.indexRate : 0.75), [1]], protect: [Float32Array.of(opts.protect != null ? opts.protect : 0.33), [1]] } : {}) });
       const y = o.audio[0]; return y.subarray(Math.min(padT, y.length), Math.max(Math.min(padT, y.length), y.length - padT));
     };
     const parts = []; let s = 0; const total = cuts.length + 1;
@@ -6648,7 +6660,7 @@ const DSP = (() => {
   const vcNative = async () => { const inf = NATIVE ? await nativeAi(true) : null; return inf && inf.available ? inf : null; };
   async function updVoiceUi() {
     const nat = await vcNative();
-    if (nat) { VCS.voices = (nat.voices || []).map(v => ({ key: v.file, name: v.name, sr: +v.sr || 40000, medianHz: +v.medianHz || 0 })); VCS.content = !!nat.content; }
+    if (nat) { VCS.voices = (nat.voices || []).map(v => ({ key: v.file, name: v.name, sr: +v.sr || 40000, medianHz: +v.medianHz || 0, index: +v.index || 0 })); VCS.content = !!nat.content; }
     else {
       try { const l = await store.get('vcVoices'); VCS.voices = Array.isArray(l) ? l : []; } catch (e) { VCS.voices = []; }
       try { const c = await store.get('vcContentInfo'); VCS.content = !!(c && c.mb); } catch (e) { VCS.content = false; }
@@ -6672,10 +6684,12 @@ const DSP = (() => {
     const nm = (hz) => { const m = Math.round(12 * Math.log2(hz / 440)) + 69; return NAMES[((m % 12) + 12) % 12] + (Math.floor(m / 12) - 1); };
     $('vcRange').textContent = take ? 'This take centres on ' + nm(take) + (v && v.medianHz ? '; you centre on ' + nm(v.medianHz) : '') + '.' : '';
     $('vcAuto').disabled = !(take && v && v.medianHz);
+    $('vcLike').disabled = !(v && v.index);
+    $('vcLikeHint').textContent = v && !v.index ? 'This voice was exported without the likeness boost: re-run cell 7 of the training notebook (no retraining needed) and add the new file to turn it on.' : 'How strongly each moment is pulled towards how you actually sound in your training recordings. Higher sounds more like you; very high can smudge the words a little.';
     $('vcGo').disabled = VCS.busy || !P.A || !sel.value || !VCS.content;
   }
   $('vcVoice').onchange = () => { ui.vcVoice = $('vcVoice').value; updVoiceUi(); autosaveSoon(); };
-  bindOut('vcSemi', v => (v > 0 ? '+' : '') + v + ' st');
+  bindOut('vcSemi', v => (v > 0 ? '+' : '') + v + ' st'); bindOut('vcLike', v => v + '%');
   $('vcAuto').onclick = () => {
     const v = VCS.voices.find(q => q.key === $('vcVoice').value), take = P.A ? DSP.vcMedianHz(P.A) : 0; if (!v || !take || !v.medianHz) return;
     const st = 12 * Math.round(Math.log2(v.medianHz / take));   // whole octaves, so the key stays the same
@@ -6697,7 +6711,7 @@ const DSP = (() => {
     const key = onnx.name, name = meta.name || onnx.name.replace(/\.onnx$/i, '');
     try {
       await store.put('vcVoice:' + key, { bytes: new Blob([onnx]) });
-      const list = VCS.voices.filter(v => v.key !== key); list.push({ key, name, sr: +meta.sr || 40000, medianHz: +meta.median_hz || 0 });
+      const list = VCS.voices.filter(v => v.key !== key); list.push({ key, name, sr: +meta.sr || 40000, medianHz: +meta.median_hz || 0, index: +meta.index || 0 });
       await store.put('vcVoices', list); ui.vcVoice = key; VCS.web.voiceKey = null;
     } catch (err) { notice('This browser couldn\u2019t keep the voice model (' + (err.message || err) + ').'); }
     updVoiceUi();
@@ -6753,7 +6767,7 @@ const DSP = (() => {
     try {
       const run = await vcRunner(key, say), t0 = performance.now(), semi = +$('vcSemi').value;
       say('Singing it in your voice\u2026 0%');
-      const y = await DSP.voiceConvert(P.x, P.sr, P.A, run, { transpose: semi, tgtSr: v.sr }, async (fr) => {
+      const y = await DSP.voiceConvert(P.x, P.sr, P.A, run, { transpose: semi, tgtSr: v.sr, index: v.index, indexRate: +$('vcLike').value / 100 }, async (fr) => {
         prog.value = fr; const el = (performance.now() - t0) / 1000, left = el / fr * (1 - fr);
         say('Singing it in your voice\u2026 ' + Math.round(fr * 100) + '%' + (fr < 1 ? ' \u00b7 about ' + (left > 90 ? Math.round(left / 60) + ' min' : Math.max(5, Math.round(left / 5) * 5) + ' s') + ' left' : '')); await tick();
       });

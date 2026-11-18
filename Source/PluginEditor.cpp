@@ -182,6 +182,7 @@ juce::WebBrowserComponent::Options SudzEditor::makeOptions()
                 v->setProperty ("name", meta["name"].toString().isNotEmpty() ? meta["name"].toString() : f.getFileNameWithoutExtension());
                 v->setProperty ("sr", meta["sr"].isVoid() ? juce::var (40000) : meta["sr"]);
                 v->setProperty ("medianHz", meta["median_hz"].isVoid() ? juce::var (0) : meta["median_hz"]);
+                v->setProperty ("index", meta["index"].isVoid() ? juce::var (0) : meta["index"]);
                 v->setProperty ("mb", (double) f.getSize() / 1e6);
                 voices.add (juce::var (v));
             }
