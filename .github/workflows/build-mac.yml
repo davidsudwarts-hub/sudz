@@ -22,7 +22,7 @@ jobs:
 
       - name: Get the native AI engine (ONNX Runtime 1.19.2, the newest that runs on macOS 11)
         run: |
-          curl -sSL -o ort.tgz https://github.com/microsoft/onnxruntime/releases/download/v1.19.2/onnxruntime-osx-universal2-1.19.2.tgz
+          curl -fsSL --retry 6 --retry-delay 15 --retry-all-errors -o ort.tgz https://github.com/microsoft/onnxruntime/releases/download/v1.19.2/onnxruntime-osx-universal2-1.19.2.tgz
           tar xzf ort.tgz
           mkdir -p pkg/Sudz/AI
           cp onnxruntime-osx-universal2-1.19.2/lib/libonnxruntime.1.19.2.dylib pkg/Sudz/AI/libonnxruntime.dylib
