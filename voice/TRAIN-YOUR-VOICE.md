@@ -46,6 +46,8 @@ On the Mac it runs on the native AI engine, roughly in real time (a 3-minute son
 - **Voice likeness** in Sudz (75% to start) pulls each moment towards how you actually sound in your training recordings. Voices exported before 18 November 2026 don't have it: open the notebook, run cells 1–4 and then **cell 7** again (no retraining), and add the new `.onnx` and `.onnx.json` in Sudz.
 - Convert a **single dry voice**. A vocal with doubles or harmonies mixed in (left and right differ) confuses the pitch and the timbre.
 - More training singing, across more of your range, makes the biggest difference of all.
+- **Robotic high notes** mean the note is higher than anything in your training singing. Either record some higher singing and retrain, or set the slider a few semitones down, convert, then tune the result back up in Sudz.
+- Conversion follows **Sudz's notes and any tuning you've done** to the take, so fix a wrong or wobbly note before converting and the new vocal sings the corrected one.
 
 ## Good to know
 

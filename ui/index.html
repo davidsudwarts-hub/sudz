@@ -2816,21 +2816,40 @@ const DSP = (() => {
     }
     return c;
   }
-  // pitch in Hz every 10 ms, from Sudz's analysis (0 where unvoiced), moved by `semi` semitones
-  function vcPitch(A, sr, n16, semi) {
+  // pitch in Hz every 10 ms, from Sudz's analysis (0 where unvoiced), moved by `semi` semitones.
+  // guide (optional): { cents, ref } per analysis frame. cents: the pitch to sing (the take's own pitch plus any tuning
+  // you did); ref: the centre of the note each frame belongs to (NaN outside notes). Frames that stray far from their
+  // note (a tracker slipping an octave, or catching a double or breath) are folded back or put on the note, and the
+  // line is lightly smoothed, so the voice is never fed a jittery or wrong pitch.
+  function vcPitch(A, sr, n16, semi, guide) {
     const nf = Math.floor(n16 / VC.WIN), f0 = new Float32Array(nf), k = Math.pow(2, (semi || 0) / 12);
+    const cents = guide && guide.cents ? guide.cents : A.cents, ref = guide && guide.ref ? guide.ref : null;
+    const c = new Float64Array(nf).fill(NaN);
     for (let j = 0; j < nf; j++) {
       const t = (j * VC.WIN + VC.WIN / 2) / VC.SR, i = Math.round(t * sr / A.hop);
-      if (i >= 0 && i < A.nf && A.voiced[i] && isFinite(A.cents[i])) f0[j] = Math.min(VC.F0MAX, 440 * Math.pow(2, (A.cents[i] - 6900) / 1200) * k);
+      if (i < 0 || i >= A.nf || !A.voiced[i] || !isFinite(cents[i])) continue;
+      let v = cents[i];
+      const r = ref ? ref[i] : NaN;
+      if (isFinite(r)) {
+        if (Math.abs(v - r) > 600) v -= 1200 * Math.round((v - r) / 1200);   // octave slip
+        if (Math.abs(v - r) > 350) v = r;                                      // still lost: sing the note
+      }
+      c[j] = v;
     }
-    // octave slips (a tracker reading half or double the note for a moment, common on doubled or breathy vocals)
-    // are folded back to the octave the neighbouring 150 ms sit in
-    const R = 7, c = Array.from(f0, v => v > 0 ? 1200 * Math.log2(v / 440) : NaN);
+    // octave slips outside notes: fold back to the octave the neighbouring 250 ms sit in
+    const R = 12;
     for (let j = 0; j < nf; j++) {
-      if (!(f0[j] > 0)) continue;
+      if (isNaN(c[j])) continue;
       const w = []; for (let q = Math.max(0, j - R); q <= Math.min(nf - 1, j + R); q++) if (!isNaN(c[q])) w.push(c[q]);
-      if (w.length < 5) continue; w.sort((a, b) => a - b); const med = w[w.length >> 1], d = c[j] - med;
-      if (Math.abs(d) > 900) f0[j] *= Math.pow(2, -Math.round(d / 1200));
+      if (w.length < 5) continue; w.sort((a, b) => a - b); const d = c[j] - w[w.length >> 1];
+      if (Math.abs(d) > 900) c[j] -= 1200 * Math.round(d / 1200);
+    }
+    // light smoothing (median of 5 frames = 50 ms): removes frame-to-frame jitter, keeps vibrato and slides
+    for (let j = 0; j < nf; j++) {
+      if (isNaN(c[j])) continue;
+      const w = []; for (let q = Math.max(0, j - 2); q <= Math.min(nf - 1, j + 2); q++) if (!isNaN(c[q])) w.push(c[q]);
+      w.sort((a, b) => a - b); const m = w[w.length >> 1];
+      f0[j] = Math.min(VC.F0MAX, 440 * Math.pow(2, (m - 6900) / 1200) * k);
     }
     return f0;
   }
@@ -2851,7 +2870,7 @@ const DSP = (() => {
     let a = resample(x, sr, SR);
     { let pk = 0; for (let i = 0; i < a.length; i++) pk = Math.max(pk, Math.abs(a[i])); if (pk > 0.95) { const g = 0.95 / pk; a = a.map(v => v * g); } }
     a = zp(zp(a, 'hp', 48, SR, 0.7071), 'hp', 48, SR, 0.7071);
-    const f0 = vcPitch(A, sr, a.length, opts.transpose), ap = vcReflect(a, PAD), f0p = vcReflect(f0, PAD / WIN);
+    const f0 = vcPitch(A, sr, a.length, opts.transpose, opts.guide), ap = vcReflect(a, PAD), f0p = vcReflect(f0, PAD / WIN);
     // cut points: the quietest 10 ms within 5 s of every 30 s
     const cuts = [];
     if (ap.length > 32 * SR) {
@@ -6767,7 +6786,12 @@ const DSP = (() => {
     try {
       const run = await vcRunner(key, say), t0 = performance.now(), semi = +$('vcSemi').value;
       say('Singing it in your voice\u2026 0%');
-      const y = await DSP.voiceConvert(P.x, P.sr, P.A, run, { transpose: semi, tgtSr: v.sr, index: v.index, indexRate: +$('vcLike').value / 100 }, async (fr) => {
+      // the pitch to sing: the take's pitch plus any tuning done in Sudz, steadied by the notes it found
+      if (renderPending) doRender();
+      const A0 = P.A, gc = new Float32Array(A0.nf), gr = new Float32Array(A0.nf).fill(NaN);
+      for (let i = 0; i < A0.nf; i++) gc[i] = A0.cents[i] + (P.ctl && P.ctl.d && i < P.ctl.d.length ? P.ctl.d[i] : 0);
+      for (const n of P.notes) { if (n.muted) continue; const c0 = noteCentre(n); for (let i = n.s; i <= n.e && i < A0.nf; i++) gr[i] = c0 + (n.pd && n.pd[i - n.s] != null ? n.pd[i - n.s] : 0); }
+      const y = await DSP.voiceConvert(P.x, P.sr, P.A, run, { transpose: semi, tgtSr: v.sr, index: v.index, indexRate: +$('vcLike').value / 100, guide: { cents: gc, ref: gr } }, async (fr) => {
         prog.value = fr; const el = (performance.now() - t0) / 1000, left = el / fr * (1 - fr);
         say('Singing it in your voice\u2026 ' + Math.round(fr * 100) + '%' + (fr < 1 ? ' \u00b7 about ' + (left > 90 ? Math.round(left / 60) + ' min' : Math.max(5, Math.round(left / 5) * 5) + ' s') + ' left' : '')); await tick();
       });
