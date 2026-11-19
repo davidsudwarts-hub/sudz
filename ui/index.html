@@ -690,6 +690,10 @@ details.fine[open] summary{margin-bottom:6px}
         <button id="splitPitchBtn" title="Cut the selected notes wherever the sung pitch moves to a new note">Split at pitch changes</button>
         <button id="deleteBtn" title="Silence the selected notes; press again to bring them back (Delete)">Delete</button>
         </div>
+        <div class="row">
+        <button id="copyBtn" title="Copy the singing of the selected notes (Ctrl/&#x2318;+C)">Copy</button>
+        <button id="pasteBtn" disabled title="Replace the selected notes with the singing you copied (Ctrl/&#x2318;+V)">Paste over</button>
+        </div>
         <label class="check"><input type="checkbox" id="slideChk"><span>Slide: follows the notes either side</span></label>
       </div>
     </section>
@@ -1113,6 +1117,7 @@ details.fine[open] summary{margin-bottom:6px}
         <li><kbd>Alt</kbd>+<kbd>&#x2190;</kbd><kbd>&#x2192;</kbd> nudge 10 ms (add <kbd>Shift</kbd> for 50 ms)</li>
         <li>Double-click a note to split it &#xb7; <kbd>J</kbd> join</li>
         <li>Wheel scrolls pitch &#xb7; <kbd>Shift</kbd>+wheel scrolls time &#xb7; <kbd>Ctrl</kbd>/<kbd>&#x2318;</kbd>+wheel zooms</li>
+        <li><kbd>Ctrl</kbd>/<kbd>&#x2318;</kbd>+<kbd>C</kbd> copy the selected notes &#xb7; select others and <kbd>Ctrl</kbd>/<kbd>&#x2318;</kbd>+<kbd>V</kbd> to paste over them</li>
         <li><kbd>Ctrl</kbd>/<kbd>&#x2318;</kbd>+<kbd>A</kbd> select all &#xb7; <kbd>Esc</kbd> clear selection</li>
         <li><kbd>Ctrl</kbd>/<kbd>&#x2318;</kbd>+<kbd>Z</kbd> undo &#xb7; <kbd>Ctrl</kbd>/<kbd>&#x2318;</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> or <kbd>Ctrl</kbd>+<kbd>Y</kbd> redo &#xb7; <kbd>Y</kbd> edit history (jump to any step)</li>
         <li><kbd>C</kbd> correct the selected notes (all notes if none are selected)</li>
@@ -5198,32 +5203,41 @@ const DSP = (() => {
     return env;
   }
   const compLen = () => P.takes.reduce((m, t) => Math.max(m, t.x.length), 0);
+  // a segment can also play its take from somewhere else (copy and paste): sample n plays take k at n + segD(g)
+  const segD = g => (g.o == null ? 0 : g.o - g.a);
+  const mkSeg = (a, b, k, d) => d ? { a, b, k, o: a + d } : { a, b, k };
   function normComp(c) {
     c = c.filter(g => g.b > g.a).sort((p, q) => p.a - q.a);
     const out = [];
-    for (const g of c) { const last = out[out.length - 1]; if (last && last.k === g.k && last.b >= g.a) last.b = Math.max(last.b, g.b); else out.push({ ...g }); }
+    for (const g of c) { const last = out[out.length - 1]; if (last && last.k === g.k && segD(last) === segD(g) && last.b >= g.a) last.b = Math.max(last.b, g.b); else out.push({ ...g }); }
+    return out;
+  }
+  function cutComp(comp, a, b) {
+    const out = [];
+    for (const g of comp) {
+      if (g.b <= a || g.a >= b) { out.push(g); continue; }
+      if (g.a < a) out.push(mkSeg(g.a, a, g.k, segD(g)));
+      if (g.b > b) out.push(mkSeg(b, g.b, g.k, segD(g)));
+    }
     return out;
   }
   function setCompRange(a, b, k) {
     a = Math.max(0, Math.round(a)); b = Math.min(compLen(), Math.round(b)); if (b - a < P.sr * 0.01) return;
-    const out = [];
-    for (const g of P.comp) {
-      if (g.b <= a || g.a >= b) { out.push(g); continue; }
-      if (g.a < a) out.push({ a: g.a, b: a, k: g.k });
-      if (g.b > b) out.push({ a: b, b: g.b, k: g.k });
-    }
+    const out = cutComp(P.comp, a, b);
     out.push({ a, b, k }); P.comp = normComp(out); compUpdated();
   }
   function buildCompAudio(comp) {
-    const N = compLen(), out = new Float32Array(N), fade = Math.round(P.sr * 0.01);
+    const N = compLen(), out = new Float32Array(N);
+    // 10 ms crossfades between takes; 25 ms where a pasted stretch joins, as the two sides are different moments
+    const bf = comp.map((g, q) => q === 0 ? 0 : Math.round(P.sr * (segD(g) || segD(comp[q - 1]) ? 0.025 : 0.01)));
     comp.forEach((g, q) => {
       const t = P.takes[g.k]; if (!t) return;
-      const fi = q > 0 ? fade : 0, fo = q < comp.length - 1 ? fade : 0;
+      const fi = bf[q], fo = q < comp.length - 1 ? bf[q + 1] : 0, d = segD(g);
       for (let n = Math.max(0, g.a - fi); n < Math.min(N, g.b + fo); n++) {
         let w = 1;
         if (fi && n < g.a + fi) w = (n - (g.a - fi)) / (2 * fi);
         if (fo && n > g.b - fo) w = Math.min(w, (g.b + fo - n) / (2 * fo));
-        if (n < t.x.length) out[n] += t.x[n] * w;
+        const m = n + d; if (m >= 0 && m < t.x.length) out[n] += t.x[m] * w;
       }
     });
     return out;
@@ -5276,11 +5290,84 @@ const DSP = (() => {
   async function applyComp() {
     if (!compChanged()) return;
     const x = P.compX || (P.compX = buildCompAudio(P.comp)), hop = P.A.hop, nf = Math.floor(x.length / hop) + 1;
-    const takeAt = (comp, n) => { for (const g of comp) if (n >= g.a && n < g.b) return g.k; return -1; };
+    const takeAt = (comp, n) => { for (const g of comp) if (n >= g.a && n < g.b) return g.k + ':' + segD(g); return -1; };
     const ch = new Uint8Array(nf);
     for (let f = 0; f < nf; f++) { const n = f * hop; if (takeAt(P.comp, n) !== takeAt(P.appliedComp, n)) ch[f] = 1; }
     await load(x, P.sr, P.name, { settings: getSettings(), carry: { notes: P.notes, changed: ch } }, { keepTakes: true, sessionId: P.sessionId });
   }
+  // ---------- copy and paste: replace a weak stretch with a better sung one
+  let clip = null;   // { segs: [{a,b,k,d}] in take positions, a, len, notes: edits of the copied notes (frames relative to a) }
+  const ED = ['shift', 'driftAmt', 'vibAmt', 'formant', 'gainDb', 'sibDb', 'lyric', 'pd', 'trans', 'follow'];
+  function selSpan() {
+    const ns = selNotes().filter(n => !n.muted); if (!ns.length || !P.A) return null;
+    const hop = P.A.hop, pre = Math.round(0.04 * P.sr / hop), post = Math.round(0.06 * P.sr / hop);
+    const s = Math.max(0, Math.min(...ns.map(n => n.s)) - pre), e = Math.min(P.A.nf, Math.max(...ns.map(n => n.e)) + 1 + post);
+    return { s, e, ns };
+  }
+  function copySel() {
+    if (!P.takes || !P.A) return;
+    const sp = selSpan(); if (!sp) { notice('Select the notes you want to copy first (drag across them, or Shift-click).'); return; }
+    if (compChanged()) { notice('Apply the comp first (go back to notes), then copy.'); return; }
+    const hop = P.A.hop, a = sp.s * hop, b = Math.min(P.raw.length, sp.e * hop);
+    const segs = [];
+    for (const g of P.appliedComp) { const x0 = Math.max(a, g.a), x1 = Math.min(b, g.b); if (x1 > x0 && g.k >= 0) segs.push({ a: x0, b: x1, k: g.k, d: segD(g) }); }
+    if (!segs.length) { notice('That stretch can\u2019t be copied (its take was deleted).'); return; }
+    const notes = sp.ns.map(n => { const o = { s: n.s - sp.s, e: n.e - sp.s, os: n.os - sp.s, oe: n.oe - sp.s }; for (const f of ED) if (n[f] !== undefined) o[f] = JSON.parse(JSON.stringify(n[f])); return o; });
+    clip = { segs, a, sF: sp.s, len: b - a, notes, n: sp.ns.length };
+    $('pasteBtn').disabled = false;
+    notice('Copied ' + sp.ns.length + ' note' + (sp.ns.length > 1 ? 's' : '') + ' (' + (clip.len / P.sr).toFixed(2) + ' s). Now select the note(s) to replace and press <b>Paste over</b> (' + (/Mac/.test(navigator.platform) ? '\u2318' : 'Ctrl') + '+V).');
+  }
+  let pasteBusy = false;
+  async function commitComp(prevApplied, a, b) {
+    await applyComp();
+    if (PLUGIN) {   // the pasted audio becomes part of the transferred recording, so it's saved with the GarageBand song
+      a = Math.max(0, a - P.sr); b = Math.min(P.raw.length, b + P.sr);
+      const CH = 65536; for (let q = a; q < b; q += CH) await nativeCall('pwPutTransfer', q, f32b64(P.raw.subarray(q, Math.min(b, q + CH))));
+      lastSent = new Float32Array(P.raw.length); schedulePush();
+    }
+  }
+  async function pasteOver() {
+    if (!clip || !P.A || pasteBusy) { if (!clip) notice('Copy a good stretch first: select its notes and press <b>Copy</b>.'); return; }
+    const sp = selSpan(); if (!sp) { notice('Select the note(s) you want to replace, then paste.'); return; }
+    if (compChanged()) { notice('Apply the comp first (go back to notes), then paste.'); return; }
+    const hop = P.A.hop, tF = sp.s, ta = tF * hop, dF = tF - clip.sF, delta = ta - clip.a, tb = Math.min(compLen(), ta + clip.len);
+    if (tb - ta < P.sr * 0.05) { notice('There isn\u2019t room to paste there.'); return; }
+    if (ta < clip.a + clip.len && tb > clip.a) { notice('Pick notes somewhere else: the paste would land on top of what you copied.'); return; }
+    const selLen = sp.e * hop - ta, prev = JSON.parse(JSON.stringify(P.appliedComp));
+    pasteBusy = true;
+    try {
+      let comp = cutComp(JSON.parse(JSON.stringify(P.appliedComp)), ta, tb);
+      for (const g of clip.segs) { const a = Math.max(ta, g.a + delta), b = Math.min(tb, g.b + delta); if (b > a) comp.push(mkSeg(a, b, g.k, g.d - delta)); }
+      P.comp = normComp(comp); compUpdated();
+      notice('Pasting\u2026');
+      await commitComp(prev, ta, tb);
+      // the pasted stretch is the same singing, so it gets the same notes, with the tuning and edits they had
+      const put = clip.notes.map(o => ({ ...o, s: o.s + tF, e: Math.min(P.A.nf - 1, o.e + tF) })).filter(o => o.e > o.s);
+      const keep = [];
+      for (const n of P.notes) {
+        const hit = put.filter(o => n.s <= o.e && n.e >= o.s);
+        if (!hit.length) { keep.push(n); continue; }
+        const lo = Math.min(...hit.map(o => o.s)), hi = Math.max(...hit.map(o => o.e));
+        if (lo - 1 - n.s >= 3) keep.push(DSP.derive(Object.assign({}, n, { e: lo - 1, oe: Math.min(n.oe, lo), pd: undefined }), P.A));   // the part before the paste
+        if (n.e - (hi + 1) >= 3) keep.push(DSP.derive(Object.assign({}, n, { s: hi + 1, os: Math.max(n.os, hi + 1), pd: undefined }), P.A));   // the part after
+      }
+      for (const o of put) {
+        const n = DSP.newNote(o.s, o.e);
+        for (const f of ED) { if (f === 'pd' && (!o.pd || o.pd.length !== o.e - o.s + 1)) continue; if (o[f] !== undefined) n[f] = JSON.parse(JSON.stringify(o[f])); }
+        n.os = o.os + tF; n.oe = o.oe + tF;
+        keep.push(DSP.derive(n, P.A));
+      }
+      for (const n of keep) if (n.pd === undefined) delete n.pd;
+      P.notes = keep.sort((a, b) => a.s - b.s); ui.sel = new Set(P.notes.map((n, i) => n.s >= tF && n.s <= put[put.length - 1].e ? i : -1).filter(i => i >= 0));
+      const carried = put.length; changed(true); updInspector(); scheduleRender();
+      requestDraw();
+      const short = selLen - clip.len > P.sr * 0.1;
+      notice('Pasted ' + (clip.len / P.sr).toFixed(2) + ' s over ' + fmtTime(ta / P.sr) + (carried ? ', with the tuning it had' : '') + '. ' + (short ? 'What you selected is longer than what you copied, so the end of it is still the old singing. ' : '') + 'Fine-tune it as usual, or move it with Alt+\u2190/\u2192 if the timing is a little off.',
+        [{ label: 'Undo paste', fn: async () => { if (pasteBusy) return; pasteBusy = true; try { P.comp = prev; compUpdated(); await commitComp(null, ta, tb); notice('Paste undone.'); } finally { pasteBusy = false; } } }]);
+    } catch (e) { notice('Couldn\u2019t paste: ' + (e.message || e)); }
+    finally { pasteBusy = false; }
+  }
+  $('copyBtn').onclick = copySel; $('pasteBtn').onclick = pasteOver;
   function setView(v) {
     if (v === ui.view) return;
     const leavingTakes = ui.view === 'takes';
@@ -7049,6 +7136,8 @@ const DSP = (() => {
     if (e.code === 'Space') { e.preventDefault(); if (tg && tg.tagName === 'BUTTON') tg.blur(); playing ? stop() : play(); return; }
     if (mod && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? doRedo() : doUndo(); return; }
     if (mod && e.key.toLowerCase() === 'y') { e.preventDefault(); doRedo(); return; }
+    if (mod && !e.shiftKey && e.key.toLowerCase() === 'c' && ui.sel.size && !(window.getSelection() + '')) { e.preventDefault(); copySel(); return; }
+    if (mod && !e.shiftKey && e.key.toLowerCase() === 'v' && clip) { e.preventDefault(); pasteOver(); return; }
     if (mod && e.key.toLowerCase() === 'a') { e.preventDefault(); ui.sel = new Set(P.notes.map((_, i) => i)); updInspector(); requestDraw(); return; }
     if (mod) return;
     if (e.key === 'Escape') { ui.sel.clear(); updInspector(); requestDraw(); }
